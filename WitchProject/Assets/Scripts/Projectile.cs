@@ -33,5 +33,15 @@ public class Projectile : MonoBehaviour
                 Destroy(gameObject);
             }
         }
+
+        if (other.CompareTag("Enemy"))
+        {
+            SummonerEnemy hitSummonerEnemy = other.GetComponent<SummonerEnemy>();
+            if (hitSummonerEnemy != null)
+            {
+                hitSummonerEnemy.TakeDamage(Damage);
+                Destroy(gameObject);
+            }
+        }
     }
 }

@@ -33,7 +33,38 @@ public class Enemy : MonoBehaviour
 
     //---------------AI 제작------------------
     private UnityEngine.AI.NavMeshAgent agent;
-    //----------------------------------------
+
+    [Header("Sight Check")]
+    private Vector3 lastKnownPlayerPosition; // 마지막으로 플레이어를 본 위치
+    [SerializeField] private LayerMask sightObstructionLayers; // 시야를 가리는 벽/장애물 레이어
+                                                               //----------------------------------------
+
+
+    /// <summary>
+    /// Raycast를 사용하여 플레이어가 적의 시야 내에 있는지 확인합니다.
+    /// </summary>
+    private bool CanSeePlayer()
+    {
+        if (player == null) return false;
+
+        Vector3 rayStart = transform.position;
+        Vector3 direction = (player.position - rayStart).normalized;
+        float distance = Vector3.Distance(rayStart, player.position);
+
+        // Raycast를 쏘아 플레이어와 적 사이에 시야를 가리는 장애물이 있는지 확인합니다.
+        if (Physics.Raycast(rayStart, direction, out RaycastHit hit, distance, sightObstructionLayers))
+        {
+            // Raycast가 플레이어에 도달하지 못하고 장애물에 먼저 부딪혔다면 시야 차단
+            // hit.transform이 플레이어가 아니라면 시야가 막힌 것입니다.
+            if (hit.transform != player)
+            {
+                return false;
+            }
+        }
+        // Raycast가 플레이어에게 도달했거나 아무것도 막지 않았다면 시야 확보
+        return true;
+    }
+
 
     // Start is called before the first frame update
     public void Start()
@@ -70,34 +101,46 @@ public class Enemy : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-
         if (player == null) return;
 
         float dist = Vector3.Distance(player.position, transform.position);
 
-        //FSM 상태 전환
+        // [수정]: 매 프레임 플레이어의 시야 확보 여부를 확인합니다.
+        bool playerVisible = CanSeePlayer();
+
+        // 시야가 확보되었다면 마지막 위치를 업데이트합니다.
+        if (playerVisible)
+        {
+            lastKnownPlayerPosition = player.position;
+        }
+
+        // FSM 상태 전환
         switch (state)
         {
             case EnemyState.Idle:
-                if (dist < traceRange)
+                if (dist < traceRange && playerVisible) // 시야 확보 시에만 추적 시작
                     state = EnemyState.Trace;
                 else if (currentHP <= maxHp / 5 * 2)
                     state = EnemyState.RunAway;
                 break;
 
             case EnemyState.Trace:
-                if (dist < attackRange)
+                if (dist < attackRange && playerVisible)
                     state = EnemyState.Attack;
                 else if (currentHP <= maxHp / 5 * 2)
                     state = EnemyState.RunAway;
                 else if (dist > traceRange)
                     state = EnemyState.Idle;
+                else if (!playerVisible) // [추가]: 시야를 놓쳤다면 마지막 위치로 이동
+                {
+                    TraceLastKnownPosition();
+                }
                 else
-                    TracePlayer();
+                    TracePlayer(); // 시야가 확보되면 계속 쫓아감
                 break;
 
             case EnemyState.Attack:
-                if (dist > attackRange)
+                if (dist > attackRange || !playerVisible) // [수정]: 시야를 잃으면 Trace로 복귀
                     state = EnemyState.Trace;
                 else if (currentHP <= maxHp / 5 * 2)
                     state = EnemyState.RunAway;
@@ -106,12 +149,33 @@ public class Enemy : MonoBehaviour
                 break;
 
             case EnemyState.RunAway:
+                // ... (RunAway 로직 유지) ...
                 if (dist > traceRange)
                     state = EnemyState.Idle;
                 else
                     RunAway();
                 break;
         }
+    }
+
+
+    // Enemy.cs (새 함수 추가)
+    /// <summary>
+    /// 플레이어를 볼 수 없을 때 마지막으로 플레이어를 본 위치로 이동합니다.
+    /// </summary>
+    void TraceLastKnownPosition()
+    {
+        if (agent == null) return;
+
+        agent.speed = moveSpeed;
+        agent.SetDestination(lastKnownPlayerPosition);
+
+        // NavMeshAgent가 마지막 위치에 거의 도달했고 (거리가 짧고), 여전히 플레이어를 볼 수 없다면 대기 상태로 전환합니다.
+        if (Vector3.Distance(transform.position, lastKnownPlayerPosition) < 1.0f && !CanSeePlayer())
+        {
+            state = EnemyState.Idle;
+        }
+        // 도중에 플레이어가 다시 시야에 들어오면 Update()에서 TracePlayer()로 복귀합니다.
     }
 
     void RunAway()

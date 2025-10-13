@@ -1,120 +1,305 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Cinemachine;
+using DG.Tweening; // DOTween 추가
 
 public class PlayerShooting : MonoBehaviour
 {
-    public GameObject projectilePrefab;
-    public GameObject bombPrefab;
+    // 무기 모드 Enum 정의
+    public enum WeaponMode { Gun, Bomb, Bow }
+
+    // ---------------------------------------------------------------------
+    // [1] 무기 및 Cinemachine 설정
+    // ---------------------------------------------------------------------
+    [Header("Weapon Mode")]
+    public WeaponMode currentWeapon = WeaponMode.Bow;
+
+    [Header("Cinemachine/Aim")]
+    [SerializeField] private CinemachineVirtualCamera aimCam;
+    private bool isAiming = false;
+    [SerializeField] private float rotationSpeed = 15f;
+
+    [Header("DOTween Settings")] // DOTween 관련 설정 추가
+    [SerializeField] private float aimFOV = 40f;        // 조준 시 FOV
+    [SerializeField] private float defaultFOV = 60f;    // 기본 FOV
+    [SerializeField] private float fovDuration = 0.3f;  // FOV 변경 애니메이션 시간
+
+    [Header("Bow Charge & UI")] // 조준점 변수 추가
+    public GameObject bowCrosshairUI; // BowCrosshair Image의 GameObject를 여기에 할당합니다.
+    public float launchForceMax = 60f;
+    public float chargeRate = 40f;
+    private float currentChargeTime = 0f;
+    public float launchForce = 30f; // 화살 발사 속도
+    private bool isCharging = false;
+
+    // 무기 프리팹 및 모델
+    [Header("Weapon Prefabs & Models")]
+    public GameObject projectilePrefab; // 총알
+    public GameObject bombPrefab;       // 폭탄
+    public GameObject arrowPrefab;      // 화살
 
     public GameObject handedBomb;
     public GameObject handedGun;
+    public GameObject handedBow;        // 활 모델
 
     public Transform firePoint;
     Camera cam;
 
-    private bool useBomb = false;         // 무기 전환 상태 (false = 총알, true = 폭탄)
-
-    // 기존 변수 유지
+    // ---------------------------------------------------------------------
+    // [2] 근접/광역 공격 설정 (기존 로직)
+    // ---------------------------------------------------------------------
+    [Header("Cone Attack Settings")]
     public float damageRange = 5f;        // 원뿔의 깊이 (최대 거리)
-    public LayerMask enemyLayer;           // 적 오브젝트의 Layer Mask
-    private const int instaKillDamage = 99999; // 부여할 데미지
+    public LayerMask enemyLayer;            // 적 오브젝트의 Layer Mask
+    private const int instaKillDamage = 10; // 부여할 데미지
 
-    // 원뿔형 범위 공격을 위한 새 변수 추가
-    public float coneAngle = 60f; // 원뿔의 각도 (전체 각도, 예: 60도는 정면에서 좌우 30도씩)
+    public float coneAngle = 60f; // 원뿔의 각도
     public Transform effectSpawnPoint;
 
+    [Header("Visual Effects")]
     public GameObject areaAttackParticlePrefab;
 
 
-
+    //----------------------------------------------------------------------------------
+    // Start & Update
+    //----------------------------------------------------------------------------------
     void Start()
     {
         cam = Camera.main;
 
-        if (handedBomb != null)
+        UpdateWeaponVisibility();
+
+        if (aimCam != null)
         {
-            handedBomb.SetActive(useBomb); // useBomb이 false라면 비활성화된 상태로 시작
+            aimCam.Priority = 0;
+            aimCam.m_Lens.FieldOfView = defaultFOV;
         }
-        if (handedGun != null)
+
+        // 시작 시 조준점 숨기기
+        if (bowCrosshairUI != null)
         {
-            handedGun.SetActive(useBomb == false); 
+            bowCrosshairUI.SetActive(false);
         }
     }
 
     void Update()
     {
-        // 무기 전환 (Z 키)
+        // 1. 무기 전환 (Z 키): 현재 모드에서 다음 모드로 순환
         if (Input.GetKeyDown(KeyCode.Z))
         {
-            useBomb = !useBomb;
-            Debug.Log(useBomb ? "폭탄 모드" : "총알 모드");
-
-            // 무기 모델 활성화/비활성화
-            if (handedBomb != null)
-            {
-                handedBomb.SetActive(useBomb);
-            }
-            if (handedGun != null)
-            {
-                handedGun.SetActive(useBomb == false);
-            }
+            currentWeapon = (WeaponMode)(((int)currentWeapon + 1) % System.Enum.GetValues(typeof(WeaponMode)).Length);
+            Debug.Log($"무기 전환: {currentWeapon}");
+            UpdateWeaponVisibility();
         }
 
-        // 발사
+        // 2. 활 모드 조준/발사 로직
+        if (currentWeapon == WeaponMode.Bow)
+        {
+            if (isCharging)
+            {
+                currentChargeTime += Time.deltaTime;
+            }
+
+            HandleBowInput();
+
+            if (!isCharging && Input.GetMouseButtonDown(0))
+            {
+                if (TryConeDamage())
+                {
+                    return;
+                }
+            }
+
+            return; // 활 모드일 때 아래 총/폭탄 발사 로직은 건너뜁니다.
+        }
+
+        // 3. 총/폭탄 모드 발사 (원뿔 범위 공격 체크)
         if (Input.GetMouseButtonDown(0))
         {
-            // 1. 원뿔 범위 내 적 검출 및 데미지 부여 시도
-            if (TryConeDamage()) // 함수 이름 변경
+            if (TryConeDamage())
             {
-                // 적이 범위 내에 있었으므로 발사 동작을 수행하지 않고 끝냄
                 return;
             }
 
-            // 2. 범위 내 적이 없었을 경우에만 기존 발사 로직 실행
-            if (useBomb)
+            if (currentWeapon == WeaponMode.Bomb)
                 ThrowBomb();
-            else
+            else if (currentWeapon == WeaponMode.Gun)
                 ShootFront();
         }
     }
 
-    // 원뿔 범위 내 적 찾기 및 데미지 부여 함수
+    void LateUpdate()
+    {
+        // 조준 중일 때 캐릭터가 카메라 방향을 부드럽게 바라보도록 처리
+        if (isAiming)
+        {
+            LookAtCameraDirection();
+        }
+    }
+
+    //----------------------------------------------------------------------------------
+    // 무기 및 조준 관리
+    //----------------------------------------------------------------------------------
+
+    void UpdateWeaponVisibility()
+    {
+        if (handedGun != null) handedGun.SetActive(currentWeapon == WeaponMode.Gun);
+        if (handedBomb != null) handedBomb.SetActive(currentWeapon == WeaponMode.Bomb);
+        if (handedBow != null) handedBow.SetActive(currentWeapon == WeaponMode.Bow);
+
+        if (isAiming) StopAiming();
+
+        // 무기 전환 시 활이 아니면 조준점 숨기기
+        if (bowCrosshairUI != null)
+        {
+            bowCrosshairUI.SetActive(currentWeapon == WeaponMode.Bow && isAiming);
+        }
+    }
+
+    void HandleBowInput()
+    {
+        // 우클릭: 조준 시작
+        if (Input.GetMouseButtonDown(1))
+        {
+            StartAiming();
+        }
+
+        // 우클릭 해제: 조준 종료
+        if (Input.GetMouseButtonUp(1))
+        {
+            StopAiming();
+        }
+
+        // 좌클릭: 시위 당기기 시작
+        if (isAiming && Input.GetMouseButtonDown(0))
+        {
+            isCharging = true;
+            currentChargeTime = 0f;
+        }
+
+        // 좌클릭 해제: 발사
+        if (isAiming && Input.GetMouseButtonUp(0))
+        {
+            ShootArrow();
+            isCharging = false;
+        }
+
+        // 조준 취소 시 충전 리셋
+        if (!isAiming && isCharging)
+        {
+            isCharging = false;
+            currentChargeTime = 0f;
+        }
+    }
+
+    void StartAiming()
+    {
+        if (aimCam == null) return;
+        isAiming = true;
+        aimCam.Priority = 10;
+
+        // [조준점 활성화]
+        if (bowCrosshairUI != null)
+        {
+            bowCrosshairUI.SetActive(true);
+        }
+
+        DOTween.To(() => aimCam.m_Lens.FieldOfView,
+                   x => aimCam.m_Lens.FieldOfView = x,
+                   aimFOV,
+                   fovDuration)
+               .SetEase(Ease.OutQuad);
+    }
+
+    void StopAiming()
+    {
+        if (aimCam == null) return;
+        isAiming = false;
+        aimCam.Priority = 0;
+
+        // [조준점 비활성화]
+        if (bowCrosshairUI != null)
+        {
+            // 충전 상태가 아니거나, 무기가 활이 아닐 때만 완전히 숨김
+            if (currentWeapon == WeaponMode.Bow)
+            {
+                bowCrosshairUI.SetActive(false);
+            }
+        }
+
+        DOTween.To(() => aimCam.m_Lens.FieldOfView,
+                   x => aimCam.m_Lens.FieldOfView = x,
+                   defaultFOV,
+                   fovDuration)
+               .SetEase(Ease.OutQuad);
+    }
+
+    void LookAtCameraDirection()
+    {
+        if (cam == null) return;
+
+        Vector3 lookDir = cam.transform.forward;
+        lookDir.y = 0;
+
+        if (lookDir.sqrMagnitude > 0)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(lookDir);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * rotationSpeed);
+        }
+    }
+
+    //----------------------------------------------------------------------------------
+    // 공격 함수
+    //----------------------------------------------------------------------------------
+
+    void ShootArrow()
+    {
+        if (arrowPrefab == null || firePoint == null) return;
+
+        float finalLaunchForce = Mathf.Clamp(currentChargeTime * chargeRate, 0f, launchForceMax);
+
+        if (finalLaunchForce < 5f)
+        {
+            Debug.Log("활 시위를 충분히 당기지 않았습니다!");
+            currentChargeTime = 0f;
+            return;
+        }
+
+        Vector3 aimDirection = Camera.main.transform.forward;
+
+        GameObject arrow = Instantiate(arrowPrefab, firePoint.position, Quaternion.LookRotation(aimDirection));
+        Rigidbody rb = arrow.GetComponent<Rigidbody>();
+        if (rb == null) { rb = arrow.AddComponent<Rigidbody>(); }
+
+        rb.AddForce(aimDirection * finalLaunchForce, ForceMode.VelocityChange);
+
+        currentChargeTime = 0f;
+    }
+
+
     private bool TryConeDamage()
     {
-        // 1. OverlapSphere를 사용하여 1차적으로 '구' 내의 모든 잠재적인 적을 검출합니다.
-        // 이는 Raycast보다 훨씬 효율적입니다.
         Collider[] colliders = Physics.OverlapSphere(transform.position, damageRange, enemyLayer);
-
         int damageCount = 0;
 
         foreach (Collider col in colliders)
         {
-            // 2. 검출된 오브젝트가 원뿔 범위 내에 있는지 '각도'를 계산하여 확인합니다.
-
-            // 플레이어에서 적을 향하는 방향 벡터
             Vector3 directionToTarget = (col.transform.position - transform.position).normalized;
-
-            // 플레이어의 정면 벡터 (원뿔의 축)
             Vector3 forward = transform.forward;
 
-            // 정면 벡터와 적 방향 벡터 사이의 각도 계산
             float angleToTarget = Vector3.Angle(forward, directionToTarget);
 
-            // 각도가 설정된 원뿔 각도(coneAngle)의 절반보다 작으면 범위 안에 있는 것입니다.
             if (angleToTarget < coneAngle / 2)
             {
-                // **옵션: 벽 관통을 막으려면 레이캐스트 추가 검사**
-                // 적이 원뿔 범위 내에 있고, 플레이어와 적 사이에 장애물이 없는지 확인합니다.
-                // Physics.Linecast(플레이어 위치, 적 위치, ~장애물 LayerMask)를 사용하여 추가 검사가 가능하나,
-                // 간단한 구현을 위해 여기서는 생략하고 각도만으로 판정합니다.
-
-                // 3. 적 컴포넌트를 가져와 데미지를 부여합니다.
-                Enemy enemyScript = col.GetComponent<Enemy>();
-
-                if (enemyScript != null)
+                if (col.TryGetComponent<Enemy>(out Enemy enemyScript))
                 {
                     enemyScript.TakeDamage(instaKillDamage);
+                    damageCount++;
+                }
+                if (col.TryGetComponent<SummonerEnemy>(out SummonerEnemy SummonerenemyScript))
+                {
+                    SummonerenemyScript.TakeDamage(instaKillDamage);
                     damageCount++;
                 }
             }
@@ -126,18 +311,13 @@ public class PlayerShooting : MonoBehaviour
 
             if (areaAttackParticlePrefab != null)
             {
-                // effectSpawnPoint가 연결되어 있으면 해당 Transform의 위치와 회전을 사용
                 Transform spawnPoint = effectSpawnPoint != null ? effectSpawnPoint : transform;
-
                 GameObject particleInstance = Instantiate(areaAttackParticlePrefab, spawnPoint.position, spawnPoint.rotation);
-
                 Destroy(particleInstance, 2f);
             }
-
             return true;
         }
-
-        return false; // 범위 내 적이 없었으므로 false 반환
+        return false;
     }
 
     void ShootFront()
@@ -148,9 +328,7 @@ public class PlayerShooting : MonoBehaviour
 
     void ThrowBomb()
     {
-        // 폭탄 생성
         GameObject bomb = Instantiate(bombPrefab, firePoint.position, Quaternion.identity);
-
         Rigidbody rb = bomb.GetComponent<Rigidbody>();
         if (rb != null)
         {
@@ -159,20 +337,18 @@ public class PlayerShooting : MonoBehaviour
         }
     }
 
+    //----------------------------------------------------------------------------------
+    // Gizmos (디버그 시각화)
+    //----------------------------------------------------------------------------------
+
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.cyan;
 
-        // 1. 원뿔의 끝 지점을 구합니다. (원의 중심)
         Vector3 coneCenter = transform.position + transform.forward * damageRange;
-
-        // 2. 원뿔의 밑면(원)의 반지름을 각도를 이용해 계산합니다.
         float radius = damageRange * Mathf.Tan(coneAngle * 0.5f * Mathf.Deg2Rad);
 
-        // 3. 구 형태로 원뿔의 끝 부분을 시각화 (정확한 원뿔 시각화는 복잡하므로 간단히 표현)
         Gizmos.DrawWireSphere(coneCenter, radius);
-
-        // 4. 원뿔의 방향선을 그립니다.
         Gizmos.DrawLine(transform.position, transform.position + Quaternion.Euler(0, coneAngle / 2, 0) * transform.forward * damageRange);
         Gizmos.DrawLine(transform.position, transform.position + Quaternion.Euler(0, -coneAngle / 2, 0) * transform.forward * damageRange);
     }

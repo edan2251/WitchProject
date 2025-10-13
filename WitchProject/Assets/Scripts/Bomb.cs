@@ -48,6 +48,16 @@ public class Bomb : MonoBehaviour
             }
         }
 
+        foreach (Collider hit in colliders)
+        {
+            SummonerEnemy hitSummonerEnemy = hit.GetComponent<SummonerEnemy>();
+
+            if (hitSummonerEnemy != null)
+            {
+                hitSummonerEnemy.TakeDamage(explosionDamage);
+            }
+        }
+
         Destroy(gameObject);
     }
 

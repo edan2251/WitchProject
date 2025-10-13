@@ -225,6 +225,9 @@ MonoBehaviour:
   maxHp: 5
   currentHP: 0
   flashDuration: 0.1
+  sightObstructionLayers:
+    serializedVersion: 2
+    m_Bits: 512
 --- !u!195 &-4850552601171849296
 NavMeshAgent:
   m_ObjectHideFlags: 0
