@@ -22,6 +22,7 @@ public class PlayerShooting : MonoBehaviour
 
     // 원뿔형 범위 공격을 위한 새 변수 추가
     public float coneAngle = 60f; // 원뿔의 각도 (전체 각도, 예: 60도는 정면에서 좌우 30도씩)
+    public Transform effectSpawnPoint;
 
     public GameObject areaAttackParticlePrefab;
 
@@ -123,24 +124,15 @@ public class PlayerShooting : MonoBehaviour
         {
             Debug.Log($"원뿔 범위 내 {damageCount}명의 적에게 {instaKillDamage} 데미지 부여!");
 
-            // --- 파티클 이펙트 재생 추가 ---
             if (areaAttackParticlePrefab != null)
             {
-                // 플레이어의 위치와 회전을 기준으로 파티클 인스턴스화
-                GameObject particleInstance = Instantiate(areaAttackParticlePrefab, transform.position, transform.rotation);
+                // effectSpawnPoint가 연결되어 있으면 해당 Transform의 위치와 회전을 사용
+                Transform spawnPoint = effectSpawnPoint != null ? effectSpawnPoint : transform;
 
-                // 파티클 시스템이 자동으로 재생되도록 설정했다면 (Play on Awake), 따로 Start() 호출 필요 없음.
-                // 만약 Play on Awake가 꺼져 있다면, 아래처럼 수동으로 재생
-                // ParticleSystem ps = particleInstance.GetComponent<ParticleSystem>();
-                // if (ps != null)
-                // {
-                //     ps.Play();
-                // }
+                GameObject particleInstance = Instantiate(areaAttackParticlePrefab, spawnPoint.position, spawnPoint.rotation);
 
-                // 이펙트 재생이 끝나면 자동으로 파괴되도록 일정 시간 후 파괴 (duration보다 약간 길게)
-                Destroy(particleInstance, 2f); // 2초 후 파괴 (파티클 시스템의 Duration에 맞춰 조절)
+                Destroy(particleInstance, 2f);
             }
-            // -----------------------------
 
             return true;
         }
