@@ -214,6 +214,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   state: 0
+  enemyData: {fileID: 11400000, guid: 38bf1c1d2071d6e48bebec39312685d7, type: 2}
   moveSpeed: 4
   traceRange: 15
   attackRange: 6

@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7de26ea8999230b4b97a7471395b6165, type: 3}
+  m_Name: 4_BombArrow
+  m_EditorClassIdentifier: 
+  skillName: "4\uB4F1\uAE09 \uD3ED\uD0C4\uD654\uC0B4"
+  tier: 3
+  type: 0
+  skillPointCost: 1
+  attackIncrease: 0
+  healthIncrease: 0
+  requiredNodesForNextTier: 7
+  parentNodes:
+  - {fileID: 11400000, guid: 20444d3f8d927b54d848ac0ee2971738, type: 2}

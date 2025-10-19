@@ -9,6 +9,9 @@ public class Enemy : MonoBehaviour
     public enum EnemyState { Idle, Trace, Attack, RunAway }
     public EnemyState state = EnemyState.Idle;
 
+    [Header("Enemy Data")]
+    public EnemyData enemyData;
+
     public float moveSpeed = 2f;
     public float traceRange = 15f;
     public float attackRange = 6f;
@@ -23,7 +26,7 @@ public class Enemy : MonoBehaviour
     public Transform player;
 
     private float lastAttackTime;
-    public int maxHp = 5;
+    public int maxHp;
     public int currentHP;
 
     public float flashDuration = 0.1f; // 빨갛게 유지되는 시간
@@ -69,7 +72,17 @@ public class Enemy : MonoBehaviour
     // Start is called before the first frame update
     public void Start()
     {
-        currentHP = maxHp;
+        if (enemyData != null)
+        {
+            currentHP = enemyData.maxHealth;
+            maxHp = enemyData.maxHealth;
+
+        }
+        else
+        {
+            currentHP = 5;
+            Debug.LogError(gameObject.name + ": EnemyData가 할당되지 않았습니다!");
+        }
 
         healthBarManager = FindObjectOfType<HealthBarManager>();
         if (healthBarManager != null)
@@ -120,14 +133,14 @@ public class Enemy : MonoBehaviour
             case EnemyState.Idle:
                 if (dist < traceRange && playerVisible) // 시야 확보 시에만 추적 시작
                     state = EnemyState.Trace;
-                else if (currentHP <= maxHp / 5 * 2)
+                else if (currentHP <= enemyData.maxHealth / 5 * 2)
                     state = EnemyState.RunAway;
                 break;
 
             case EnemyState.Trace:
                 if (dist < attackRange && playerVisible)
                     state = EnemyState.Attack;
-                else if (currentHP <= maxHp / 5 * 2)
+                else if (currentHP <= enemyData.maxHealth / 5 * 2)
                     state = EnemyState.RunAway;
                 else if (dist > traceRange)
                     state = EnemyState.Idle;
@@ -142,7 +155,7 @@ public class Enemy : MonoBehaviour
             case EnemyState.Attack:
                 if (dist > attackRange || !playerVisible) // [수정]: 시야를 잃으면 Trace로 복귀
                     state = EnemyState.Trace;
-                else if (currentHP <= maxHp / 5 * 2)
+                else if (currentHP <= enemyData.maxHealth / 5 * 2)
                     state = EnemyState.RunAway;
                 else
                     AttackPlayer();
@@ -297,6 +310,15 @@ public class Enemy : MonoBehaviour
 
     void Die()
     {
+        // 몬스터의 경험치 데이터를 가져와서
+        int expAmount = enemyData.experienceGained;
+
+        // 몬스터 처치 시 경험치 부여 (싱글톤 Instance를 통해 접근)
+        if (PlayerExperience.Instance != null)
+        {
+            PlayerExperience.Instance.AddExperience(expAmount);
+        }
+
         if (healthBarManager != null)
         {
             healthBarManager.UnregisterEnemy(this);

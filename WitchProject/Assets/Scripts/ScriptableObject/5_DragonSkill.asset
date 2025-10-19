@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7de26ea8999230b4b97a7471395b6165, type: 3}
+  m_Name: 5_DragonSkill
+  m_EditorClassIdentifier: 
+  skillName: "5\uB4F1\uAE09 \uC6A9\uC2A4\uD0AC"
+  tier: 4
+  type: 3
+  skillPointCost: 1
+  attackIncrease: 0
+  healthIncrease: 0
+  requiredNodesForNextTier: 9
+  parentNodes:
+  - {fileID: 11400000, guid: d849090b84199194c86a5e0850fd583b, type: 2}

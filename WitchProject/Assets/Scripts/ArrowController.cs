@@ -7,12 +7,14 @@ public class ArrowController : MonoBehaviour
     [SerializeField] private float gravityScale = 1.0f; // 중력 배율
 
     // [추가]: 화살의 데미지 값을 설정합니다. (PlayerShooting에서 설정하거나, 여기서 고정)
-    [SerializeField] private int arrowDamage = 3;
+    private int arrowDamage = 3;
 
-    // [수정]: 화살이 이미 적에게 박혔는지 확인하는 플래그 (중복 데미지 방지)
+    // [추가]: 적용할 특수 화살 스킬 데이터
+    private SkillNodeData arrowSkillData;
+
     private bool hasHitEnemy = false;
 
-    void Start()
+    void Awake()
     {
         rb = GetComponent<Rigidbody>();
         // 화살이 발사 직후 회전하도록 설정 (선택 사항)
@@ -67,9 +69,26 @@ public class ArrowController : MonoBehaviour
         }
     }
 
+    public void InitializeArrow(int damage, SkillNodeData skillData)
+    {
+        this.arrowDamage = damage;
+        this.arrowSkillData = skillData;
+
+        // 특수 화살에 따라 속도나 궤적 등 추가 설정 가능
+        if (skillData != null)
+        {
+            Debug.Log($"화살 초기화: 데미지 {damage}, 스킬: {skillData.skillName}");
+        }
+    }
+
     // 데미지 적용 및 박히는 처리 통합 함수
     private void ApplyDamageAndStick(GameObject target)
     {
+        if (arrowSkillData != null)
+        {
+            ApplySpecialArrowEffect(target);
+        }
+
         // 데미지 적용 (TryGetComponent를 통해 한 번에 처리)
         if (target.TryGetComponent<Enemy>(out Enemy enemy))
         {
@@ -82,6 +101,26 @@ public class ArrowController : MonoBehaviour
 
         // 박히는 처리
         ApplyStickLogic(target);
+    }
+
+    private void ApplySpecialArrowEffect(GameObject target)
+    {
+        switch (arrowSkillData.skillName)
+        {
+            case "불 화살":
+                // target에 화상(Burn) 효과 컴포넌트 추가 및 적용
+                Debug.Log("불 화살: 화상 효과 적용!");
+                break;
+            case "번개 화살":
+                // 주변 적에게 체인 라이트닝 효과 적용
+                Debug.Log("번개 화살: 연쇄 번개 효과 적용!");
+                break;
+            case "폭탄 화살":
+                // 충돌 지점에 폭발 효과 및 광역 데미지 적용
+                Debug.Log("폭탄 화살: 폭발 광역 데미지 적용!");
+                break;
+                // ... 다른 특수 화살 스킬 ...
+        }
     }
 
     // 화살을 오브젝트에 박히게 하는 로직

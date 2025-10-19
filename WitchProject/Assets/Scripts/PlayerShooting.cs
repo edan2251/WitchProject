@@ -60,6 +60,10 @@ public class PlayerShooting : MonoBehaviour
     [Header("Visual Effects")]
     public GameObject areaAttackParticlePrefab;
 
+    [Header("Skill Tree Integration")]
+    [SerializeField] private int baseArrowDamage = 3; // 일반 활의 기본 데미지
+    private int currentArrowDamage; // 최종 화살 데미지
+
 
     //----------------------------------------------------------------------------------
     // Start & Update
@@ -67,6 +71,7 @@ public class PlayerShooting : MonoBehaviour
     void Start()
     {
         cam = Camera.main;
+        currentArrowDamage = baseArrowDamage;
 
         UpdateWeaponVisibility();
 
@@ -85,6 +90,18 @@ public class PlayerShooting : MonoBehaviour
 
     void Update()
     {
+        if (SkillUIManager.Instance != null && SkillUIManager.Instance.IsPanelOpen)
+        {
+            // 패널이 열려 있을 때 마우스 입력(공격, 조준)을 막음
+            // 활 충전 중이라면 충전 상태를 강제 종료 (UI를 열면서 발사가 나가는 것을 방지)
+            if (isCharging)
+            {
+                isCharging = false;
+                currentChargeTime = 0f;
+            }
+            return; // 이후의 모든 입력/공격 로직을 건너뜀
+        }
+
         // 1. 무기 전환 (Z 키): 현재 모드에서 다음 모드로 순환
         if (Input.GetKeyDown(KeyCode.Z))
         {
@@ -131,11 +148,22 @@ public class PlayerShooting : MonoBehaviour
 
     void LateUpdate()
     {
+        if (SkillUIManager.Instance != null && SkillUIManager.Instance.IsPanelOpen)
+        {
+            return;
+        }
+
         // 조준 중일 때 캐릭터가 카메라 방향을 부드럽게 바라보도록 처리
         if (isAiming)
         {
             LookAtCameraDirection();
         }
+    }
+
+    public void UpdateArrowDamage(int bonusAttack)
+    {
+        currentArrowDamage = baseArrowDamage + bonusAttack;
+        Debug.Log($"화살 최종 데미지 업데이트: {currentArrowDamage}");
     }
 
     //----------------------------------------------------------------------------------
@@ -269,6 +297,14 @@ public class PlayerShooting : MonoBehaviour
         Vector3 aimDirection = Camera.main.transform.forward;
 
         GameObject arrow = Instantiate(arrowPrefab, firePoint.position, Quaternion.LookRotation(aimDirection));
+
+        ArrowController ac = arrow.GetComponent<ArrowController>();
+        if (ac != null)
+        {
+            // 기본 데미지에 스킬 보너스를 더한 최종 데미지 전달
+            ac.InitializeArrow(currentArrowDamage, SkillManager.Instance.activeArrowSkill);
+        }
+
         Rigidbody rb = arrow.GetComponent<Rigidbody>();
         if (rb == null) { rb = arrow.AddComponent<Rigidbody>(); }
 

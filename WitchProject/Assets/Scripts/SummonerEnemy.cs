@@ -6,10 +6,13 @@ using UnityEngine.AI;
 public class SummonerEnemy : MonoBehaviour
 {
     // ---------------------------------------------------------------------
-    // [1] 체력 및 UI 관련 변수 (나중에 구현할 부분)
+    // [1] 체력 및 UI 관련 변수
     // ---------------------------------------------------------------------
+
+    [Header("Enemy Data")]
+    public EnemyData enemyData;
+
     [Header("Health Settings (To Be Implemented)")]
-    public int maxHp = 10;
     public int currentHP;
     // private HealthBarManager healthBarManager; // [TODO: UI]
 
@@ -46,7 +49,15 @@ public class SummonerEnemy : MonoBehaviour
     void Start()
     {
         // 체력 초기화
-        currentHP = maxHp; // [TODO: UI]
+        if (enemyData != null)
+        {
+            currentHP = enemyData.maxHealth; // ScriptableObject에서 체력 가져옴
+        }
+        else
+        {
+            currentHP = 10;
+            Debug.LogError(gameObject.name + ": EnemyData가 할당되지 않았습니다!");
+        } // [TODO: UI]
 
         // UI 매니저 등록은 나중에 Health Component를 만들 때 구현합니다. 
         // [TODO: UI]
@@ -268,6 +279,15 @@ public class SummonerEnemy : MonoBehaviour
 
     void Die()
     {
+        // 몬스터의 경험치 데이터를 가져와서
+        int expAmount = enemyData.experienceGained;
+
+        // 몬스터 처치 시 경험치 부여 (싱글톤 Instance를 통해 접근)
+        if (PlayerExperience.Instance != null)
+        {
+            PlayerExperience.Instance.AddExperience(expAmount);
+        }
+
         // [TODO: UI]
         // if (healthBarManager != null) { healthBarManager.UnregisterEnemy(this); } 
 
