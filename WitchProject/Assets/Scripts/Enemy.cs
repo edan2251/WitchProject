@@ -4,325 +4,255 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.AI;
 
-public class Enemy : MonoBehaviour
+// [수정] MonoBehaviour 대신 BaseEnemy를 상속
+public class Enemy : BaseEnemy
 {
-    public enum EnemyState { Idle, Trace, Attack, RunAway }
-    public EnemyState state = EnemyState.Idle;
+    // [수정] 상태 변경: Wander(순찰), MoveToAttack(공격이동), Attack(공격)
+    public enum EnemyState { Wander, MoveToAttack, Attack }
+    public EnemyState state = EnemyState.Wander; // 기본 상태를 Wander로
 
-    [Header("Enemy Data")]
-    public EnemyData enemyData;
+    // [수정] EnemyData, HP, FlashDuration 등 공통 변수는 BaseEnemy에 있으므로 여기선 삭제
 
-    public float moveSpeed = 2f;
-    public float traceRange = 15f;
+    [Header("Goblin AI")]
+    public float moveSpeed = 2f;      // 순찰 속도
+    public float chaseSpeed = 4f;     // 추격 속도
     public float attackRange = 6f;
     public float attackCooldown = 1.5f;
 
-
-    private HealthBarManager healthBarManager;
-
+    [Header("Projectile")]
     public GameObject projectilePrefab;
     public Transform firePoint;
 
-    public Transform player;
-
+    // --- 비공개 변수 ---
+    private Transform player;
+    private NavMeshAgent agent;
     private float lastAttackTime;
-    public int maxHp;
-    public int currentHP;
 
-    public float flashDuration = 0.1f; // 빨갛게 유지되는 시간
-    private Renderer enemyRenderer;
-    private Color originalColor;
+    [Header("Wandering & Separation")]
+    public float wanderRadius = 20f; // 순찰 반경
+    public float wanderTimer = 5f;   // 새 순찰 지점을 찍는 주기
+    private float lastWanderTime;
+    public float separationDistance = 5f; // 다른 고블린과 유지할 최소 거리
 
-
-    //---------------AI 제작------------------
-    private UnityEngine.AI.NavMeshAgent agent;
+    // [추가] 모든 고블린 인스턴스를 추적하는 static 리스트
+    private static List<Enemy> allGoblins = new List<Enemy>();
 
     [Header("Sight Check")]
-    private Vector3 lastKnownPlayerPosition; // 마지막으로 플레이어를 본 위치
     [SerializeField] private LayerMask sightObstructionLayers; // 시야를 가리는 벽/장애물 레이어
-                                                               //----------------------------------------
+
+
+    // [추가] 오브젝트 활성화 시 리스트에 추가
+    void OnEnable()
+    {
+        if (!allGoblins.Contains(this))
+        {
+            allGoblins.Add(this);
+        }
+    }
+
+    // [추가] 오브젝트 비활성화/파괴 시 리스트에서 제거
+    void OnDisable()
+    {
+        if (allGoblins.Contains(this))
+        {
+            allGoblins.Remove(this);
+        }
+    }
 
 
     /// <summary>
-    /// Raycast를 사용하여 플레이어가 적의 시야 내에 있는지 확인합니다.
+    /// Raycast를 사용하여 플레이어가 적의 시야 내에 있는지 확인합니다. (벽 통과 사격 방지용)
     /// </summary>
     private bool CanSeePlayer()
     {
         if (player == null) return false;
 
         Vector3 rayStart = transform.position;
-        Vector3 direction = (player.position - rayStart).normalized;
-        float distance = Vector3.Distance(rayStart, player.position);
+        // [수정] 플레이어 가슴을 조준
+        Vector3 targetPosition = player.position + Vector3.up * 1.0f;
+        Vector3 direction = (targetPosition - rayStart).normalized;
+        float distance = Vector3.Distance(rayStart, targetPosition);
 
-        // Raycast를 쏘아 플레이어와 적 사이에 시야를 가리는 장애물이 있는지 확인합니다.
         if (Physics.Raycast(rayStart, direction, out RaycastHit hit, distance, sightObstructionLayers))
         {
-            // Raycast가 플레이어에 도달하지 못하고 장애물에 먼저 부딪혔다면 시야 차단
-            // hit.transform이 플레이어가 아니라면 시야가 막힌 것입니다.
             if (hit.transform != player)
             {
                 return false;
             }
         }
-        // Raycast가 플레이어에게 도달했거나 아무것도 막지 않았다면 시야 확보
         return true;
     }
 
 
-    // Start is called before the first frame update
-    public void Start()
+    // [수정] Start() 함수 - BaseEnemy의 기능을 먼저 실행하고, 중복 코드 제거
+    public override void Start() // 'override' 키워드 추가
     {
-        if (enemyData != null)
-        {
-            currentHP = enemyData.maxHealth;
-            maxHp = enemyData.maxHealth;
+        // 1. [필수] 부모(BaseEnemy)의 Start()를 먼저 호출 (HP, 헬스바, 렌더러 설정)
+        base.Start();
 
-        }
-        else
-        {
-            currentHP = 5;
-            Debug.LogError(gameObject.name + ": EnemyData가 할당되지 않았습니다!");
-        }
-
-        healthBarManager = FindObjectOfType<HealthBarManager>();
-        if (healthBarManager != null)
-        {
-            healthBarManager.RegisterEnemy(this); // 매니저에 자신(Enemy)을 등록
-        }
-
+        // 2. [Enemy 고유 설정]
         player = GameObject.FindGameObjectWithTag("Player").transform;
+        lastAttackTime = -attackCooldown; // 즉시 공격 쿨타임이 돌도록 설정
 
-        lastAttackTime = -attackCooldown;
-
-
-        //---------------AI 제작------------------
         agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
         if (agent != null)
-        {
-            agent.speed = moveSpeed; // 이동 속성을 스크립트 변수와 연결
-        }
-        //----------------------------------------
-
-
-        enemyRenderer = GetComponentInChildren<Renderer>();
-        if (enemyRenderer != null)
-        {
-            originalColor = enemyRenderer.material.color;
-        }
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        if (player == null) return;
-
-        float dist = Vector3.Distance(player.position, transform.position);
-
-        // [수정]: 매 프레임 플레이어의 시야 확보 여부를 확인합니다.
-        bool playerVisible = CanSeePlayer();
-
-        // 시야가 확보되었다면 마지막 위치를 업데이트합니다.
-        if (playerVisible)
-        {
-            lastKnownPlayerPosition = player.position;
-        }
-
-        // FSM 상태 전환
-        switch (state)
-        {
-            case EnemyState.Idle:
-                if (dist < traceRange && playerVisible) // 시야 확보 시에만 추적 시작
-                    state = EnemyState.Trace;
-                else if (currentHP <= enemyData.maxHealth / 5 * 2)
-                    state = EnemyState.RunAway;
-                break;
-
-            case EnemyState.Trace:
-                if (dist < attackRange && playerVisible)
-                    state = EnemyState.Attack;
-                else if (currentHP <= enemyData.maxHealth / 5 * 2)
-                    state = EnemyState.RunAway;
-                else if (dist > traceRange)
-                    state = EnemyState.Idle;
-                else if (!playerVisible) // [추가]: 시야를 놓쳤다면 마지막 위치로 이동
-                {
-                    TraceLastKnownPosition();
-                }
-                else
-                    TracePlayer(); // 시야가 확보되면 계속 쫓아감
-                break;
-
-            case EnemyState.Attack:
-                if (dist > attackRange || !playerVisible) // [수정]: 시야를 잃으면 Trace로 복귀
-                    state = EnemyState.Trace;
-                else if (currentHP <= enemyData.maxHealth / 5 * 2)
-                    state = EnemyState.RunAway;
-                else
-                    AttackPlayer();
-                break;
-
-            case EnemyState.RunAway:
-                // ... (RunAway 로직 유지) ...
-                if (dist > traceRange)
-                    state = EnemyState.Idle;
-                else
-                    RunAway();
-                break;
-        }
-    }
-
-
-    // Enemy.cs (새 함수 추가)
-    /// <summary>
-    /// 플레이어를 볼 수 없을 때 마지막으로 플레이어를 본 위치로 이동합니다.
-    /// </summary>
-    void TraceLastKnownPosition()
-    {
-        if (agent == null) return;
-
-        agent.speed = moveSpeed;
-        agent.SetDestination(lastKnownPlayerPosition);
-
-        // NavMeshAgent가 마지막 위치에 거의 도달했고 (거리가 짧고), 여전히 플레이어를 볼 수 없다면 대기 상태로 전환합니다.
-        if (Vector3.Distance(transform.position, lastKnownPlayerPosition) < 1.0f && !CanSeePlayer())
-        {
-            state = EnemyState.Idle;
-        }
-        // 도중에 플레이어가 다시 시야에 들어오면 Update()에서 TracePlayer()로 복귀합니다.
-    }
-
-    void RunAway()
-    {
-        //----------------기본코드-----------------------
-        //Vector3 dir = (player.position - transform.position).normalized;
-        //transform.position += dir * -moveSpeed * 2 * Time.deltaTime;
-
-        //Vector3 oppositeDirection = -dir;
-
-        //transform.rotation = Quaternion.LookRotation(oppositeDirection);
-        //-----------------------------------------------
-
-        //-------------------------------AI제작---------------------------------------------
-        if (agent == null) return;
-
-        if (agent.speed != moveSpeed * 2f)
-        {
-            agent.speed = moveSpeed * 2f;
-        }
-
-        Vector3 runDirection = transform.position - player.position;
-        Vector3 destination = transform.position + runDirection.normalized * traceRange;
-        agent.SetDestination(destination);
-        //--------------------------------------------------------------------------------
-    }
-
-    void TracePlayer()
-    {
-        //-----------------------기본코드-------------------------------
-        //Vector3 dir = (player.position - transform.position).normalized;
-        //transform.position += dir * moveSpeed * Time.deltaTime;
-        //transform.LookAt(player.position);
-        //--------------------------------------------------------------
-
-        //-------------------------AI-------------------------------------
-        if (agent == null) return;
-
-        if (agent.speed != moveSpeed)
         {
             agent.speed = moveSpeed;
         }
 
-        agent.SetDestination(player.position);
-        //--------------------------------------------------------------
+        lastWanderTime = -wanderTimer; // 즉시 순찰 시작
+        state = EnemyState.Wander;     // 상태 초기화
     }
 
-    void AttackPlayer()
+    // [수정] FSM 로직 전체 변경
+    void Update()
     {
-        //일정 쿨다운마다 발사
-        if (Time.time >= lastAttackTime + attackCooldown)
+        if (player == null || agent == null) return;
+
+        // FSM 상태 전환
+        switch (state)
         {
+            case EnemyState.Wander:
+                Wander(); // 순찰 및 거리 벌리기 로직 수행
 
-            if (agent == null) return;
+                // 공격 쿨타임이 다 찼는지 확인
+                if (Time.time >= lastAttackTime + attackCooldown)
+                {
+                    state = EnemyState.MoveToAttack;
+                    if (agent != null) agent.isStopped = false;
+                }
+                break;
 
-            if (agent.speed != moveSpeed)
+            case EnemyState.MoveToAttack:
+                MoveToPlayer(); // 플레이어 추적
+
+                float dist = Vector3.Distance(player.position, transform.position);
+                bool playerVisible = CanSeePlayer();
+
+                // 공격 범위에 들어왔고, 시야가 확보되면 공격
+                if (dist < attackRange && playerVisible)
+                {
+                    state = EnemyState.Attack;
+                    if (agent != null)
+                    {
+                        agent.isStopped = true; // 공격 위해 정지
+                        agent.ResetPath();
+                    }
+                }
+                break;
+
+            case EnemyState.Attack:
+                // 공격은 한 프레임에 실행되고 바로 Wander로 복귀
+                AttackOnceAndRun();
+                break;
+        }
+    }
+
+    // [추가] 순찰 및 동료 거리 유지 로직
+    void Wander()
+    {
+        if (agent.speed != moveSpeed)
+            agent.speed = moveSpeed;
+
+        // 순찰 타이머가 다 됐거나, 목적지에 도착했다면 새 목적지 설정
+        if (Time.time > lastWanderTime + wanderTimer || (!agent.pathPending && agent.remainingDistance < 0.5f))
+        {
+            lastWanderTime = Time.time;
+
+            // 1. 다른 고블린과 거리를 벌리는 방향 계산
+            Vector3 separationVector = Vector3.zero;
+            foreach (Enemy otherGoblin in allGoblins)
             {
-                agent.speed = moveSpeed;
+                if (otherGoblin == this || otherGoblin == null) continue;
+
+                float distToOther = Vector3.Distance(transform.position, otherGoblin.transform.position);
+                if (distToOther > 0 && distToOther < separationDistance)
+                {
+                    separationVector += (transform.position - otherGoblin.transform.position).normalized;
+                }
             }
 
-            lastAttackTime = Time.time;
-            ShootProjectile();
+            Vector3 finalDirection;
+            if (separationVector != Vector3.zero)
+            {
+                // 2a. 벌어져야 할 방향이 있다면 그쪽으로 우선 이동
+                finalDirection = separationVector.normalized;
+            }
+            else
+            {
+                // [수정] 2b. 플레이어 방향을 피해서 랜덤한 방향으로 순찰
+                Vector3 directionToPlayer = (player.position - transform.position).normalized;
+                int attempts = 0; // 무한 루프 방지용
+
+                do
+                {
+                    finalDirection = Random.insideUnitSphere.normalized;
+                    attempts++;
+                } while (Vector3.Angle(finalDirection, directionToPlayer) < 90f && attempts < 10);
+            }
+
+            // 3. 최종 방향으로 wanderRadius만큼 떨어진 유효한 NavMesh 위치 탐색
+            Vector3 destination = transform.position + finalDirection * wanderRadius;
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(destination, out hit, wanderRadius, NavMesh.AllAreas))
+            {
+                agent.SetDestination(hit.position);
+            }
+        }
+    }
+
+    // [추가] 플레이어에게 이동하는 로직 (기존 TracePlayer와 동일)
+    void MoveToPlayer()
+    {
+        if (agent == null) return;
+
+        if (agent.speed != chaseSpeed)
+        {
+            agent.speed = chaseSpeed;
+        }
+
+        agent.SetDestination(player.position);
+    }
+
+    // [추가] 한 발 쏘고 바로 Wander 상태로 복귀하는 로직
+    void AttackOnceAndRun()
+    {
+        if (agent == null) return;
+
+        if (!agent.isStopped)
+        {
+            agent.isStopped = true;
+            agent.ResetPath();
+        }
+
+        transform.LookAt(player.position);
+        ShootProjectile();
+
+        lastAttackTime = Time.time;
+        state = EnemyState.Wander;
+
+        if (agent != null)
+        {
+            agent.isStopped = false;
         }
     }
 
     void ShootProjectile()
     {
-        if(projectilePrefab != null && firePoint != null)
+        if (projectilePrefab != null && firePoint != null)
         {
-            transform.LookAt(player.position);
             GameObject proj = Instantiate(projectilePrefab, firePoint.position, firePoint.rotation);
             EnemyProjectile ep = proj.GetComponent<EnemyProjectile>();
-            if(ep != null)
+            if (ep != null)
             {
-                Vector3 dir = (player.position - firePoint.position).normalized;
+                // [수정] 플레이어의 발(position)이 아닌, 1m 위(가슴)를 조준
+                Vector3 targetPosition = player.position + Vector3.up * 1.0f;
+                Vector3 dir = (targetPosition - firePoint.position).normalized;
                 ep.SetDirection(dir);
             }
         }
     }
 
-    public void FlashOnHit()
-    {
-        // 중복 실행 방지를 위해 이미 코루틴이 실행 중이면 정지 후 다시 시작
-        StopAllCoroutines();
-        StartCoroutine(FlashColor());
-    }
-
-    // 피격 시 빨갛게 깜빡이는 코루틴
-    IEnumerator FlashColor()
-    {
-        if (enemyRenderer != null)
-        {
-            // 피격 시 색상을 빨간색으로 변경
-            enemyRenderer.material.SetColor("_BaseColor", Color.red);
-
-            yield return new WaitForSeconds(flashDuration);
-
-            // 원래 색상으로 복구
-            enemyRenderer.material.SetColor("_BaseColor", originalColor);
-        }
-    }
-
-
-    public void TakeDamage(int damage)
-    {
-        FlashOnHit();
-        currentHP -= damage;
-
-        if (healthBarManager != null)
-        {
-            healthBarManager.UpdateEnemyHealth(this);
-        }
-
-        if (currentHP <= 0)
-        {
-            Die();
-        }
-    }
-
-    void Die()
-    {
-        // 몬스터의 경험치 데이터를 가져와서
-        int expAmount = enemyData.experienceGained;
-
-        // 몬스터 처치 시 경험치 부여 (싱글톤 Instance를 통해 접근)
-        if (PlayerExperience.Instance != null)
-        {
-            PlayerExperience.Instance.AddExperience(expAmount);
-        }
-
-        if (healthBarManager != null)
-        {
-            healthBarManager.UnregisterEnemy(this);
-        }
-        Destroy(gameObject);
-    }
+    // [삭제] FlashOnHit(), FlashColor(), TakeDamage(), Die() 함수는
+    // BaseEnemy에 있으므로 여기서는 모두 삭제합니다.
 }

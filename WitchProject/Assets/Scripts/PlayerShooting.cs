@@ -6,24 +6,17 @@ using DG.Tweening; // DOTween 추가
 
 public class PlayerShooting : MonoBehaviour
 {
-    // 무기 모드 Enum 정의
-    public enum WeaponMode { Gun, Bomb, Bow }
-
-    // ---------------------------------------------------------------------
     // [1] 무기 및 Cinemachine 설정
     // ---------------------------------------------------------------------
-    [Header("Weapon Mode")]
-    public WeaponMode currentWeapon = WeaponMode.Bow;
-
     [Header("Cinemachine/Aim")]
     [SerializeField] private CinemachineVirtualCamera aimCam;
     private bool isAiming = false;
     [SerializeField] private float rotationSpeed = 15f;
 
     [Header("DOTween Settings")] // DOTween 관련 설정 추가
-    [SerializeField] private float aimFOV = 40f;        // 조준 시 FOV
-    [SerializeField] private float defaultFOV = 60f;    // 기본 FOV
-    [SerializeField] private float fovDuration = 0.3f;  // FOV 변경 애니메이션 시간
+    [SerializeField] private float aimFOV = 40f;          // 조준 시 FOV
+    [SerializeField] private float defaultFOV = 60f;      // 기본 FOV
+    [SerializeField] private float fovDuration = 0.3f;    // FOV 변경 애니메이션 시간
 
     [Header("Bow Charge & UI")] // 조준점 변수 추가
     public GameObject bowCrosshairUI; // BowCrosshair Image의 GameObject를 여기에 할당합니다.
@@ -35,14 +28,8 @@ public class PlayerShooting : MonoBehaviour
 
     // 무기 프리팹 및 모델
     [Header("Weapon Prefabs & Models")]
-    public GameObject projectilePrefab; // 총알
-    public GameObject bombPrefab;       // 폭탄
     public GameObject arrowPrefab;      // 화살
-
-    public GameObject handedBomb;
-    public GameObject handedGun;
     public GameObject handedBow;        // 활 모델
-
     public Transform firePoint;
     Camera cam;
 
@@ -50,8 +37,8 @@ public class PlayerShooting : MonoBehaviour
     // [2] 근접/광역 공격 설정 (기존 로직)
     // ---------------------------------------------------------------------
     [Header("Cone Attack Settings")]
-    public float damageRange = 5f;        // 원뿔의 깊이 (최대 거리)
-    public LayerMask enemyLayer;            // 적 오브젝트의 Layer Mask
+    public float damageRange = 5f;      // 원뿔의 깊이 (최대 거리)
+    public LayerMask enemyLayer;        // 적 오브젝트의 Layer Mask
     private const int instaKillDamage = 10; // 부여할 데미지
 
     public float coneAngle = 60f; // 원뿔의 각도
@@ -92,8 +79,6 @@ public class PlayerShooting : MonoBehaviour
     {
         if (SkillUIManager.Instance != null && SkillUIManager.Instance.IsPanelOpen)
         {
-            // 패널이 열려 있을 때 마우스 입력(공격, 조준)을 막음
-            // 활 충전 중이라면 충전 상태를 강제 종료 (UI를 열면서 발사가 나가는 것을 방지)
             if (isCharging)
             {
                 isCharging = false;
@@ -102,47 +87,20 @@ public class PlayerShooting : MonoBehaviour
             return; // 이후의 모든 입력/공격 로직을 건너뜀
         }
 
-        // 1. 무기 전환 (Z 키): 현재 모드에서 다음 모드로 순환
-        if (Input.GetKeyDown(KeyCode.Z))
+        if (isCharging)
         {
-            currentWeapon = (WeaponMode)(((int)currentWeapon + 1) % System.Enum.GetValues(typeof(WeaponMode)).Length);
-            Debug.Log($"무기 전환: {currentWeapon}");
-            UpdateWeaponVisibility();
+            currentChargeTime += Time.deltaTime;
         }
 
-        // 2. 활 모드 조준/발사 로직
-        if (currentWeapon == WeaponMode.Bow)
-        {
-            if (isCharging)
-            {
-                currentChargeTime += Time.deltaTime;
-            }
+        HandleBowInput();
 
-            HandleBowInput();
-
-            if (!isCharging && Input.GetMouseButtonDown(0))
-            {
-                if (TryConeDamage())
-                {
-                    return;
-                }
-            }
-
-            return; // 활 모드일 때 아래 총/폭탄 발사 로직은 건너뜁니다.
-        }
-
-        // 3. 총/폭탄 모드 발사 (원뿔 범위 공격 체크)
-        if (Input.GetMouseButtonDown(0))
+        // 조준 중이 아닐 때(isCharging=false) 좌클릭 시 근접 공격 시도
+        if (!isCharging && Input.GetMouseButtonDown(0))
         {
             if (TryConeDamage())
             {
                 return;
             }
-
-            if (currentWeapon == WeaponMode.Bomb)
-                ThrowBomb();
-            else if (currentWeapon == WeaponMode.Gun)
-                ShootFront();
         }
     }
 
@@ -163,7 +121,6 @@ public class PlayerShooting : MonoBehaviour
     public void UpdateArrowDamage(int bonusAttack)
     {
         currentArrowDamage = baseArrowDamage + bonusAttack;
-        Debug.Log($"화살 최종 데미지 업데이트: {currentArrowDamage}");
     }
 
     //----------------------------------------------------------------------------------
@@ -172,16 +129,11 @@ public class PlayerShooting : MonoBehaviour
 
     void UpdateWeaponVisibility()
     {
-        if (handedGun != null) handedGun.SetActive(currentWeapon == WeaponMode.Gun);
-        if (handedBomb != null) handedBomb.SetActive(currentWeapon == WeaponMode.Bomb);
-        if (handedBow != null) handedBow.SetActive(currentWeapon == WeaponMode.Bow);
-
+        if (handedBow != null) handedBow.SetActive(true);
         if (isAiming) StopAiming();
-
-        // 무기 전환 시 활이 아니면 조준점 숨기기
         if (bowCrosshairUI != null)
         {
-            bowCrosshairUI.SetActive(currentWeapon == WeaponMode.Bow && isAiming);
+            bowCrosshairUI.SetActive(isAiming);
         }
     }
 
@@ -227,16 +179,15 @@ public class PlayerShooting : MonoBehaviour
         isAiming = true;
         aimCam.Priority = 10;
 
-        // [조준점 활성화]
         if (bowCrosshairUI != null)
         {
             bowCrosshairUI.SetActive(true);
         }
 
         DOTween.To(() => aimCam.m_Lens.FieldOfView,
-                   x => aimCam.m_Lens.FieldOfView = x,
-                   aimFOV,
-                   fovDuration)
+                 x => aimCam.m_Lens.FieldOfView = x,
+                 aimFOV,
+                 fovDuration)
                .SetEase(Ease.OutQuad);
     }
 
@@ -246,20 +197,15 @@ public class PlayerShooting : MonoBehaviour
         isAiming = false;
         aimCam.Priority = 0;
 
-        // [조준점 비활성화]
         if (bowCrosshairUI != null)
         {
-            // 충전 상태가 아니거나, 무기가 활이 아닐 때만 완전히 숨김
-            if (currentWeapon == WeaponMode.Bow)
-            {
-                bowCrosshairUI.SetActive(false);
-            }
+            bowCrosshairUI.SetActive(false);
         }
 
         DOTween.To(() => aimCam.m_Lens.FieldOfView,
-                   x => aimCam.m_Lens.FieldOfView = x,
-                   defaultFOV,
-                   fovDuration)
+                 x => aimCam.m_Lens.FieldOfView = x,
+                 defaultFOV,
+                 fovDuration)
                .SetEase(Ease.OutQuad);
     }
 
@@ -289,7 +235,6 @@ public class PlayerShooting : MonoBehaviour
 
         if (finalLaunchForce < 5f)
         {
-            Debug.Log("활 시위를 충분히 당기지 않았습니다!");
             currentChargeTime = 0f;
             return;
         }
@@ -301,7 +246,6 @@ public class PlayerShooting : MonoBehaviour
         ArrowController ac = arrow.GetComponent<ArrowController>();
         if (ac != null)
         {
-            // 기본 데미지에 스킬 보너스를 더한 최종 데미지 전달
             ac.InitializeArrow(currentArrowDamage, SkillManager.Instance.activeArrowSkill);
         }
 
@@ -328,23 +272,20 @@ public class PlayerShooting : MonoBehaviour
 
             if (angleToTarget < coneAngle / 2)
             {
-                if (col.TryGetComponent<Enemy>(out Enemy enemyScript))
+                // [수정] BaseEnemy로 한 번에 검사
+                if (col.TryGetComponent<BaseEnemy>(out BaseEnemy baseEnemyScript))
                 {
-                    enemyScript.TakeDamage(instaKillDamage);
+                    baseEnemyScript.TakeDamage(instaKillDamage);
                     damageCount++;
                 }
-                if (col.TryGetComponent<SummonerEnemy>(out SummonerEnemy SummonerenemyScript))
-                {
-                    SummonerenemyScript.TakeDamage(instaKillDamage);
-                    damageCount++;
-                }
+                // [참고] 만약 SummonerEnemy가 BaseEnemy를 상속받지 않는
+                // 특별한 경우라면, else if로 남겨둬야 합니다.
+                // (하지만 이전 단계에서 상속시켰으므로 이젠 필요 없습니다.)
             }
         }
 
         if (damageCount > 0)
         {
-            Debug.Log($"원뿔 범위 내 {damageCount}명의 적에게 {instaKillDamage} 데미지 부여!");
-
             if (areaAttackParticlePrefab != null)
             {
                 Transform spawnPoint = effectSpawnPoint != null ? effectSpawnPoint : transform;
@@ -354,23 +295,6 @@ public class PlayerShooting : MonoBehaviour
             return true;
         }
         return false;
-    }
-
-    void ShootFront()
-    {
-        Vector3 direction = firePoint.forward;
-        Instantiate(projectilePrefab, firePoint.position, Quaternion.LookRotation(direction));
-    }
-
-    void ThrowBomb()
-    {
-        GameObject bomb = Instantiate(bombPrefab, firePoint.position, Quaternion.identity);
-        Rigidbody rb = bomb.GetComponent<Rigidbody>();
-        if (rb != null)
-        {
-            Vector3 throwForce = firePoint.forward * 10f + firePoint.up * 5f;
-            rb.AddForce(throwForce, ForceMode.Impulse);
-        }
     }
 
     //----------------------------------------------------------------------------------

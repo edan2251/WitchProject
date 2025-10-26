@@ -52,7 +52,6 @@ public class SkillManager : MonoBehaviour
         }
         else
         {
-            Debug.LogError("Error: '일반 활' SkillNodeData를 찾을 수 없습니다. 인스펙터에 모든 노드가 할당되었는지 확인하세요.");
         }
 
         // 초기 상태를 반영하여 UI 업데이트를 한 번 호출합니다. (SkillTreeUI.cs가 이 이벤트를 구독해야 합니다.)
@@ -82,7 +81,6 @@ public class SkillManager : MonoBehaviour
         unlockedNodesPerTier[skillNode.tier] = unlockedNodesPerTier.ContainsKey(skillNode.tier) ?
                                                 unlockedNodesPerTier[skillNode.tier] + 1 : 1;
 
-        Debug.Log($"[초기화] {skillNode.skillName} 스킬 강제 해금 완료!");
     }
 
 
@@ -96,7 +94,6 @@ public class SkillManager : MonoBehaviour
         // PlayerExperience.Instance가 null일 경우 방지
         if (PlayerExperience.Instance == null)
         {
-            Debug.LogError("PlayerExperience Instance is missing!");
             return false;
         }
 
@@ -119,7 +116,6 @@ public class SkillManager : MonoBehaviour
                                                      unlockedNodesPerTier[skillNode.tier] + 1 : 1;
 
             OnSkillUnlock.Invoke();
-            Debug.Log($"{skillNode.skillName} 스킬 해금 완료!");
             return true;
         }
 
@@ -151,7 +147,6 @@ public class SkillManager : MonoBehaviour
             {
                 if (!unlockedSkills.Contains(parentNode))
                 {
-                    Debug.LogWarning($"{skillNode.skillName} 스킬은 {parentNode.skillName} 스킬이 선행되어야 합니다.");
                     return false;
                 }
             }
@@ -204,7 +199,6 @@ public class SkillManager : MonoBehaviour
 
         if (cumulativeUnlockedCount < requiredCumulativeCount)
         {
-            Debug.LogWarning($"티어 {skillNode.tier} 스킬 해금 실패: 누적 해금 노드 총 {requiredCumulativeCount}개가 필요합니다. (현재 {cumulativeUnlockedCount}개)");
             return false;
         }
 
@@ -252,7 +246,6 @@ public class SkillManager : MonoBehaviour
         if (unlockedSkills.Contains(arrowSkill) && arrowSkill.type == SkillType.Arrow && arrowSkill.tier != SkillTier.Tier5)
         {
             activeArrowSkill = arrowSkill;
-            Debug.Log($"{arrowSkill.skillName} 활성화!");
             // PlayerShooting의 발사 로직에서 이 정보를 사용합니다.
         }
     }

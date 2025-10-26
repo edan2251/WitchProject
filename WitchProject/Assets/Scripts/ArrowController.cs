@@ -1,69 +1,48 @@
 using UnityEngine;
-using UnityEngine.AI; // NavMeshAgent 사용 시 필요 (미니언 AI 코드에서 가져옴)
+using UnityEngine.AI;
 
 public class ArrowController : MonoBehaviour
 {
     private Rigidbody rb;
     [SerializeField] private float gravityScale = 1.0f; // 중력 배율
 
-    // [추가]: 화살의 데미지 값을 설정합니다. (PlayerShooting에서 설정하거나, 여기서 고정)
     private int arrowDamage = 3;
-
-    // [추가]: 적용할 특수 화살 스킬 데이터
     private SkillNodeData arrowSkillData;
-
     private bool hasHitEnemy = false;
 
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
-        // 화살이 발사 직후 회전하도록 설정 (선택 사항)
-        transform.rotation = Quaternion.LookRotation(rb.velocity);
+        // 발사 시 속도(velocity)가 아직 0일 수 있으므로 Awake에서 회전 설정은 제거
     }
 
     void FixedUpdate()
     {
-        // 이미 박혔다면 움직임/회전 로직 건너뜀
         if (rb.isKinematic) return;
 
-        // 화살에 중력 적용 (FixedUpdate에서 물리 연산 처리)
         rb.AddForce(Physics.gravity * gravityScale, ForceMode.Acceleration);
 
-        // 화살이 항상 이동 방향을 바라보게 회전
         if (rb.velocity.sqrMagnitude > 0.1f)
         {
             transform.rotation = Quaternion.LookRotation(rb.velocity);
         }
     }
 
-    // [수정]: OnTriggerEnter로 변경하여 다른 투사체와 동일한 방식으로 처리
+    // [수정] OnTriggerEnter 로직
     private void OnTriggerEnter(Collider other)
     {
-        // 이미 적을 맞혔다면 중복 처리 방지
-        if (hasHitEnemy) return;
+        if (hasHitEnemy) return; // 이미 무언가에 맞았다면 중복 실행 방지
 
-        // Enemy 태그가 아닐 경우, 벽이나 바닥에 부딪혔는지 확인하는 로직이 필요할 수 있습니다.
-        // 현재는 Enemy 충돌만 처리합니다.
-
-        if (other.CompareTag("Enemy"))
+        // 1. [핵심 수정] BaseEnemy를 상속받는 모든 적을 한 번에 검사
+        if (other.TryGetComponent<BaseEnemy>(out BaseEnemy hitEnemy))
         {
-            // 1. 데미지 로직: Enemy 타입 검사
-            if (other.TryGetComponent<Enemy>(out Enemy hitEnemy))
-            {
-                ApplyDamageAndStick(hitEnemy.gameObject);
-                return;
-            }
-
-            // 2. 데미지 로직: SummonerEnemy 타입 검사
-            if (other.TryGetComponent<SummonerEnemy>(out SummonerEnemy hitSummonerEnemy))
-            {
-                ApplyDamageAndStick(hitSummonerEnemy.gameObject);
-                return;
-            }
+            // 적을 맞혔으므로 데미지 적용 및 화살 박기
+            ApplyDamageAndStick(hitEnemy.gameObject);
+            return; // 함수 종료
         }
 
-        //Enemy 태그 없이 다른 물체(벽, 바닥)에 닿았을 때 박히는 처리가 필요하다면 여기에 추가:
-         if (!other.isTrigger && !other.CompareTag("Player"))
+        // 2. 적이 아니고, 플레이어도 아니고, 트리거도 아닌 물체(벽, 바닥 등)에 박히는 로직
+        if (!other.isTrigger && !other.CompareTag("Player") && !other.CompareTag("Enemy"))
         {
             ApplyStickLogic(other.gameObject);
         }
@@ -74,32 +53,29 @@ public class ArrowController : MonoBehaviour
         this.arrowDamage = damage;
         this.arrowSkillData = skillData;
 
-        // 특수 화살에 따라 속도나 궤적 등 추가 설정 가능
         if (skillData != null)
         {
             Debug.Log($"화살 초기화: 데미지 {damage}, 스킬: {skillData.skillName}");
         }
     }
 
-    // 데미지 적용 및 박히는 처리 통합 함수
+    // [수정] 데미지 적용 및 박히는 처리 통합 함수
     private void ApplyDamageAndStick(GameObject target)
     {
+        // 1. 특수 효과 적용 (있다면)
         if (arrowSkillData != null)
         {
             ApplySpecialArrowEffect(target);
         }
 
-        // 데미지 적용 (TryGetComponent를 통해 한 번에 처리)
-        if (target.TryGetComponent<Enemy>(out Enemy enemy))
+        // 2. [핵심 수정] BaseEnemy 컴포넌트로 데미지 적용
+        // (OnTriggerEnter에서 이미 검사했지만, 안전을 위해 한 번 더)
+        if (target.TryGetComponent<BaseEnemy>(out BaseEnemy baseEnemy))
         {
-            enemy.TakeDamage(arrowDamage);
-        }
-        else if (target.TryGetComponent<SummonerEnemy>(out SummonerEnemy summonerEnemy))
-        {
-            summonerEnemy.TakeDamage(arrowDamage);
+            baseEnemy.TakeDamage(arrowDamage);
         }
 
-        // 박히는 처리
+        // 3. 화살 박히는 로직 실행
         ApplyStickLogic(target);
     }
 
@@ -108,36 +84,34 @@ public class ArrowController : MonoBehaviour
         switch (arrowSkillData.skillName)
         {
             case "불 화살":
-                // target에 화상(Burn) 효과 컴포넌트 추가 및 적용
                 Debug.Log("불 화살: 화상 효과 적용!");
                 break;
             case "번개 화살":
-                // 주변 적에게 체인 라이트닝 효과 적용
                 Debug.Log("번개 화살: 연쇄 번개 효과 적용!");
                 break;
             case "폭탄 화살":
-                // 충돌 지점에 폭발 효과 및 광역 데미지 적용
                 Debug.Log("폭탄 화살: 폭발 광역 데미지 적용!");
                 break;
-                // ... 다른 특수 화살 스킬 ...
         }
     }
 
     // 화살을 오브젝트에 박히게 하는 로직
     private void ApplyStickLogic(GameObject target)
     {
-        hasHitEnemy = true;
+        hasHitEnemy = true; // 중복 충돌 방지 플래그 설정
 
-        // Rigidbody를 비활성화 (물리 운동 중단)
+        // 물리 운동 중단
         if (rb != null)
         {
-            rb.isKinematic = true;
+            // [수정] 순서 변경: 속도를 먼저 0으로 만들고 Kinematic으로 전환
+            rb.velocity = Vector3.zero; // 1. 속도를 0으로 정지
+            rb.isKinematic = true;        // 2. 물리 효과 끔
         }
 
-        // 화살이 박힌 오브젝트를 부모로 설정하여 같이 움직이게 함
+        // 화살이 박힌 오브젝트를 부모로 설정
         transform.SetParent(target.transform);
 
-        // Collider를 비활성화하여 추가적인 트리거/충돌을 방지 (선택 사항)
+        // 추가 충돌 방지를 위해 콜라이더 비활성화
         Collider col = GetComponent<Collider>();
         if (col != null)
         {

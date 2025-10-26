@@ -31,6 +31,17 @@ public class PlayerController : MonoBehaviour
 
     public Slider hpSlider;
 
+    // [추가] 플레이어 외형 렌더러 (자식 오브젝트에 있다면 인스펙터에서 할당)
+    public Renderer playerRenderer;
+    private Color originalColor; // 원래 색상 저장용
+    public Color poisonColor = new Color(0.5f, 1f, 0.5f, 1f); // 독에 걸렸을 때의 초록빛
+    public float flashDuration = 0.1f; // 피격 시 빨갛게 깜빡이는 시간
+
+    // [추가] 중독 상태 추적용 변수
+    private bool isPoisoned = false;
+    // [추가] 색상 변경 코루틴 중복 실행 방지용
+    private Coroutine poisonEffectCoroutine;
+
     // --- 마우스 락 상태 변수 추가 ---
     private bool isCursorLocked = true;
 
@@ -47,6 +58,17 @@ public class PlayerController : MonoBehaviour
         hpSlider.value = 1f;
         currentSpeed = walkSpeed; // Initialize currentSpeed
 
+        // [추가] 렌더러 및 원래 색상 초기화
+        if (playerRenderer == null)
+        {
+            // 인스펙터에서 할당 안했으면 자식에서 찾아보기
+            playerRenderer = GetComponentInChildren<Renderer>();
+        }
+        if (playerRenderer != null)
+        {
+            originalColor = playerRenderer.material.color;
+        }
+
         // --- 마우스 커서 락 초기 설정 ---
         SetCursorLock(true);
     }
@@ -56,9 +78,28 @@ public class PlayerController : MonoBehaviour
         // --- 마우스 락/해제 로직 추가 ---
         HandleCursorLock();
 
-        // 커서가 해제된 상태에서는 플레이어 움직임 및 회전 로직을 건너뜁니다.
+        // --- 1. 중력 및 땅 감지 (항상 실행) ---
+        // 이 로직은 커서가 잠겨있든 아니든 항상 실행되어야
+        // 캐릭터가 공중에 떠다니거나 바닥을 뚫는 것을 방지합니다.
+        isGrounded = controller.isGrounded;
+        if (isGrounded && velocity.y < 0)
+        {
+            velocity.y = -2f;
+        }
+
+        // 중력 적용
+        velocity.y += gravity * Time.deltaTime;
+        controller.Move(velocity * Time.deltaTime);
+
+
+        // --- 2. 플레이어 입력 처리 (커서가 잠겨있을 때만 실행) ---
+        // 커서가 해제된 상태(예: ESC 누름)에서는 플레이어의 움직임, 점프, 회전 로직을 건너뜁니다.
         if (!isCursorLocked) return;
+
         // ----------------------------------
+        // ( ↓↓↓ 이제부터는 isCursorLocked가 true일 때만 실행되는 코드 ↓↓↓ )
+        // ----------------------------------
+
 
         // Resets the POV camera's horizontal and vertical values
         if (Input.GetKeyDown(KeyCode.Tab))
@@ -94,12 +135,6 @@ public class PlayerController : MonoBehaviour
             virtualCam.m_Lens.FieldOfView = Mathf.Lerp(virtualCam.m_Lens.FieldOfView, 40f, Time.deltaTime * 5f);
         }
 
-        // Ground check and velocity reset
-        isGrounded = controller.isGrounded;
-        if (isGrounded && velocity.y < 0)
-        {
-            velocity.y = -2f;
-        }
 
         // Get movement input
         float x = Input.GetAxis("Horizontal");
@@ -115,12 +150,12 @@ public class PlayerController : MonoBehaviour
         camRight.Normalize();
 
         Vector3 move = (camForward * z + camRight * x).normalized;
-        controller.Move(move * currentSpeed * Time.deltaTime);
+        controller.Move(move * currentSpeed * Time.deltaTime); // <-- 플레이어 입력에 의한 이동
 
-        // --- Rotation Logic (Always active) ---
+        // --- Rotation Logic ---
         if (pov != null)
         {
-            float cameraYaw = pov.m_HorizontalAxis.Value;    //마우스 좌우 회전값
+            float cameraYaw = pov.m_HorizontalAxis.Value;   //마우스 좌우 회전값
             Quaternion targetRot = Quaternion.Euler(0f, cameraYaw, 0f);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, rotationSpeed * Time.deltaTime);
         }
@@ -131,10 +166,6 @@ public class PlayerController : MonoBehaviour
         {
             velocity.y = jumpPower;
         }
-
-        // Apply gravity
-        velocity.y += gravity * Time.deltaTime;
-        controller.Move(velocity * Time.deltaTime);
     }
 
     // --- 마우스 락/해제 처리 함수 ---
@@ -175,9 +206,104 @@ public class PlayerController : MonoBehaviour
         currentHP -= damage;
         hpSlider.value = (float)currentHP / maxHP;
 
+        FlashOnHit();
+
         if (currentHP <= 0)
         {
             Die();
+        }
+    }
+
+    public void ApplyPoisonDamage(int initialDamage, int dotDamage, float dotInterval, int dotTicks, float poisonChance)
+    {
+        // 1. 첫 타격 데미지를 즉시 적용
+        TakeDamage(initialDamage);
+
+        // 2. 70% 확률 (poisonChance) 체크
+        if (Random.value <= poisonChance) // Random.value는 0.0 ~ 1.0 사이의 난수 반환
+        {
+            // 3. 중독 코루틴 시작
+            // [수정] 중복 실행을 막기 위해 기존 코루틴이 있다면 중지
+            if (poisonEffectCoroutine != null)
+            {
+                StopCoroutine(poisonEffectCoroutine);
+            }
+            poisonEffectCoroutine = StartCoroutine(PoisonCoroutine(dotDamage, dotInterval, dotTicks));
+        }
+    }
+
+    // [추가] 일정 시간마다 독 데미지를 입히는 코루틴
+    private IEnumerator PoisonCoroutine(int damagePerTick, float interval, int ticks)
+    {
+        int ticksRemaining = ticks;
+        isPoisoned = true;
+
+        // [추가] 1. 독 상태 시작 (초록색으로 변경)
+        if (playerRenderer != null)
+        {
+            playerRenderer.material.color = poisonColor;
+        }
+
+        while (ticksRemaining > 0)
+        {
+            yield return new WaitForSeconds(interval);
+
+            if (currentHP > 0)
+            {
+                // [수정] 데미지를 입히면 TakeDamage (내부에서 FlashOnHit 호출)
+                TakeDamage(damagePerTick);
+
+                // [추가] 빨간색 플래시가 끝난 후, 다시 독 색상(초록)으로 복귀
+                // (FlashOnHit가 0.1초간 빨갛게 만드므로 그보다 조금 더 기다림)
+                yield return new WaitForSeconds(flashDuration + 0.05f);
+                if (playerRenderer != null && isPoisoned) // 아직 독 상태면
+                {
+                    playerRenderer.material.color = poisonColor;
+                }
+            }
+
+            ticksRemaining--;
+        }
+
+        // [추가] 2. 독 상태 종료 (원래 색상으로 복구)
+        isPoisoned = false;
+        if (playerRenderer != null)
+        {
+            playerRenderer.material.color = originalColor;
+        }
+        poisonEffectCoroutine = null; // 코루틴 종료됨을 표시
+    }
+
+
+    public void FlashOnHit()
+    {
+        // 이미 다른 플래시 코루틴이 실행 중이면 중복 방지
+        StopCoroutine("FlashColorCoroutine");
+        StartCoroutine(FlashColorCoroutine());
+    }
+
+    // [추가] 플래시 효과 코루틴
+    IEnumerator FlashColorCoroutine()
+    {
+        if (playerRenderer != null)
+        {
+            // 1. 빨간색으로 변경
+            playerRenderer.material.color = Color.red;
+
+            // 2. 짧은 시간 대기
+            yield return new WaitForSeconds(flashDuration);
+
+            // 3. 상태에 따라 색상 복구
+            if (isPoisoned)
+            {
+                // 중독 상태였다면 초록색으로 복구
+                playerRenderer.material.color = poisonColor;
+            }
+            else
+            {
+                // 아니라면 원래 색상으로 복구
+                playerRenderer.material.color = originalColor;
+            }
         }
     }
 
