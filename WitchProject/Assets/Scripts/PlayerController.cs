@@ -24,9 +24,15 @@ public class PlayerController : MonoBehaviour
     public bool isGrounded;
     public bool isRunning;
 
-    // public CinemachineSwitcher cinemachineSwitcher; // REMOVED
+    public int bonusAttack { get; private set; } = 0;
 
-    public int maxHP = 100;
+    // [수정] maxHP -> baseMaxHP (기본 체력)
+    public int baseMaxHP = 100;
+    // [추가] 스킬로 인한 추가 체력
+    public int bonusMaxHP { get; private set; } = 0;
+    // [수정] 최종 최대 체력 (기본 + 보너스). 읽기 전용 프로퍼티로 변경
+    public int maxHP => baseMaxHP + bonusMaxHP;
+
     public int currentHP;
 
     public Slider hpSlider;
@@ -54,8 +60,10 @@ public class PlayerController : MonoBehaviour
         // 일반 3인칭 숄더뷰에서는 POV 대신 Transposer/Composer를 사용하는 경우가 많습니다.
         pov = virtualCam.GetCinemachineComponent<CinemachinePOV>();
 
-        currentHP = maxHP;
-        hpSlider.value = 1f;
+        currentHP = maxHP; // maxHP 프로퍼티(baseMaxHP + bonusMaxHP)를 사용
+        // hpSlider.value = 1f; // [수정] UpdateHPSlider() 호출로 대체
+        UpdateHPSlider();
+
         currentSpeed = walkSpeed; // Initialize currentSpeed
 
         // [추가] 렌더러 및 원래 색상 초기화
@@ -204,7 +212,8 @@ public class PlayerController : MonoBehaviour
     public void TakeDamage(int damage)
     {
         currentHP -= damage;
-        hpSlider.value = (float)currentHP / maxHP;
+        // hpSlider.value = (float)currentHP / maxHP; // [수정] UpdateHPSlider() 호출로 대체
+        UpdateHPSlider(); // [추가] 슬라이더 업데이트 함수 호출
 
         FlashOnHit();
 
@@ -305,6 +314,43 @@ public class PlayerController : MonoBehaviour
                 playerRenderer.material.color = originalColor;
             }
         }
+    }
+
+    private void UpdateHPSlider()
+    {
+        if (hpSlider != null)
+        {
+            // maxHP가 0이 되는 경우(오류)를 방지
+            if (maxHP > 0)
+            {
+                hpSlider.value = (float)currentHP / maxHP;
+            }
+            else
+            {
+                hpSlider.value = 0;
+            }
+        }
+    }
+
+    public void UpdateBonusHealth(int bonus)
+    {
+        int oldMaxHP = maxHP; // 이전 최대 체력 (프로퍼티)
+        bonusMaxHP = bonus;
+        int newMaxHP = maxHP; // 새 최대 체력 (프로퍼티)
+
+        int healthIncrease = newMaxHP - oldMaxHP;
+
+        // 체력이 증가했다면, 현재 체력도 그만큼 올려줍니다.
+        if (healthIncrease > 0)
+        {
+            currentHP += healthIncrease;
+        }
+
+        // (스킬 초기화 등으로) 체력이 감소할 경우를 대비해
+        // 현재 체력이 최대 체력을 넘지 않도록 Clamp
+        currentHP = Mathf.Clamp(currentHP, 0, newMaxHP);
+
+        UpdateHPSlider();
     }
 
     void Die()

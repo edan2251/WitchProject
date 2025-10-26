@@ -10,6 +10,8 @@ TagManager:
   - Ground
   - Environment
   - EnemyProjectile
+  - PlayerTriggerZone
+  - TriggerZone
   layers:
   - Default
   - TransparentFX
@@ -41,8 +43,8 @@ TagManager:
   - 
   - 
   - 
-  - 
-  - 
+  - PlayerTriggerZone
+  - TriggerZone
   m_SortingLayers:
   - name: Default
     uniqueID: 0

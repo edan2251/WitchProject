@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1026025108436661658}
   - component: {fileID: 3653853210875633570}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: FourGround
   m_TagString: Ground
   m_Icon: {fileID: 0}
@@ -65,7 +65,7 @@ GameObject:
   - component: {fileID: 8505127178931822629}
   - component: {fileID: 8538432545800635905}
   - component: {fileID: 6622564592487203192}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: default
   m_TagString: Untagged
   m_Icon: {fileID: 0}

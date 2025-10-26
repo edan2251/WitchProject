@@ -67,7 +67,6 @@ public class SkillTreeUI : MonoBehaviour
         {
             if (SkillManager.Instance.TryUnlockSkill(skillNodeData))
             {
-                Debug.Log($"{skillNodeData.skillName} 해금됨!");
                 // 해금 후 상태 업데이트는 SkillManager 이벤트에 의해 자동으로 호출됩니다.
 
                 // (선택 사항) 특수 활 스킬인 경우 자동으로 활성화

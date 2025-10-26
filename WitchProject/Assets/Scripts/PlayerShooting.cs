@@ -6,6 +6,8 @@ using DG.Tweening; // DOTween 추가
 
 public class PlayerShooting : MonoBehaviour
 {
+    PlayerController playerController;
+
     // [1] 무기 및 Cinemachine 설정
     // ---------------------------------------------------------------------
     [Header("Cinemachine/Aim")]
@@ -48,8 +50,8 @@ public class PlayerShooting : MonoBehaviour
     public GameObject areaAttackParticlePrefab;
 
     [Header("Skill Tree Integration")]
-    [SerializeField] private int baseArrowDamage = 3; // 일반 활의 기본 데미지
-    private int currentArrowDamage; // 최종 화살 데미지
+    public int baseArrowDamage = 3; // 일반 활의 기본 데미지
+    public int currentArrowDamage; // 최종 화살 데미지
 
 
     //----------------------------------------------------------------------------------
@@ -57,6 +59,8 @@ public class PlayerShooting : MonoBehaviour
     //----------------------------------------------------------------------------------
     void Start()
     {
+        playerController = GetComponent<PlayerController>();
+
         cam = Camera.main;
         currentArrowDamage = baseArrowDamage;
 
@@ -85,6 +89,11 @@ public class PlayerShooting : MonoBehaviour
                 currentChargeTime = 0f;
             }
             return; // 이후의 모든 입력/공격 로직을 건너뜀
+        }
+
+        if (Input.GetKeyDown(KeyCode.X))
+        {
+            SkillManager.Instance.SelectNextArrowSkill();
         }
 
         if (isCharging)
@@ -246,7 +255,7 @@ public class PlayerShooting : MonoBehaviour
         ArrowController ac = arrow.GetComponent<ArrowController>();
         if (ac != null)
         {
-            ac.InitializeArrow(currentArrowDamage, SkillManager.Instance.activeArrowSkill);
+            ac.InitializeArrow(currentArrowDamage, SkillManager.Instance.activeArrowSkill, enemyLayer);
         }
 
         Rigidbody rb = arrow.GetComponent<Rigidbody>();

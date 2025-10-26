@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7de26ea8999230b4b97a7471395b6165, type: 3}
   m_Name: 4_BombArrow
   m_EditorClassIdentifier: 
-  skillName: "4\uB4F1\uAE09 \uD3ED\uD0C4\uD654\uC0B4"
+  skillName: "\uD3ED\uD0C4 \uD654\uC0B4"
   tier: 3
   type: 0
   skillPointCost: 1

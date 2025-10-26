@@ -11,7 +11,7 @@ public enum SkillType { Arrow, Attack, Health, Ability }
 public class SkillNodeData : ScriptableObject
 {
     [Header("Node Info")]
-    public string skillName = "일반 활";
+    public string skillName = "일반 화살";
     public SkillTier tier = SkillTier.Tier1;
     public SkillType type = SkillType.Arrow;
     public int skillPointCost = 1;

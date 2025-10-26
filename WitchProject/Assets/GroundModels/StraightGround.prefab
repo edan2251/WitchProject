@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1981316261812096376}
   - component: {fileID: 7452046039412899743}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: StraightGround
   m_TagString: Ground
   m_Icon: {fileID: 0}
@@ -65,7 +65,7 @@ GameObject:
   - component: {fileID: 7705196456480416626}
   - component: {fileID: 7520372624210850}
   - component: {fileID: 3059213156055917223}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: default
   m_TagString: Untagged
   m_Icon: {fileID: 0}

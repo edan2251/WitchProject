@@ -10,7 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 852191649400462757}
   - component: {fileID: 6192379661502465434}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: ThreeGround
   m_TagString: Ground
   m_Icon: {fileID: 0}
@@ -65,7 +65,7 @@ GameObject:
   - component: {fileID: 4090921878226108878}
   - component: {fileID: 47651095908185154}
   - component: {fileID: 4786810679752738689}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: default
   m_TagString: Untagged
   m_Icon: {fileID: 0}

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7de26ea8999230b4b97a7471395b6165, type: 3}
   m_Name: 3_Lightning
   m_EditorClassIdentifier: 
-  skillName: "3\uB4F1\uAE09 \uBC88\uAC1C\uD654\uC0B4"
+  skillName: "\uBC88\uAC1C \uD654\uC0B4"
   tier: 2
   type: 0
   skillPointCost: 1

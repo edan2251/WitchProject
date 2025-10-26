@@ -24,8 +24,14 @@ public class SkillManager : MonoBehaviour
 
     public UnityEvent OnSkillUnlock = new UnityEvent();
 
-    // 현재 활성화된(사용 중인) 특수 화살 스킬
+    [System.Serializable]
+    public class ActiveSkillChangedEvent : UnityEvent<SkillNodeData> { }
+    public ActiveSkillChangedEvent OnActiveArrowChanged = new ActiveSkillChangedEvent();
+
     public SkillNodeData activeArrowSkill { get; private set; } = null;
+
+    // 교체를 위한 정렬된 특수 화살 목록
+    private List<SkillNodeData> unlockedArrowSkills = new List<SkillNodeData>();
 
 
     private void Awake()
@@ -110,6 +116,11 @@ public class SkillManager : MonoBehaviour
         {
             unlockedSkills.Add(skillNode);
             ApplySkillEffects(skillNode);
+
+            if (skillNode.type == SkillType.Arrow && skillNode.tier != SkillTier.Tier5)
+            {
+                UpdateUnlockedArrowList();
+            }
 
             // 해금된 노드 개수 업데이트
             unlockedNodesPerTier[skillNode.tier] = unlockedNodesPerTier.ContainsKey(skillNode.tier) ?
@@ -216,6 +227,12 @@ public class SkillManager : MonoBehaviour
         totalBonusHealth += skillNode.healthIncrease;
 
         // PlayerShooting 스크립트에 스탯을 반영하는 로직이 필요합니다.
+        PlayerController playerController = FindObjectOfType<PlayerController>();
+        if (playerController != null)
+        {
+            playerController.UpdateBonusHealth(totalBonusHealth);
+        }
+
         PlayerShooting playerShooting = FindObjectOfType<PlayerShooting>();
         if (playerShooting != null)
         {
@@ -225,7 +242,13 @@ public class SkillManager : MonoBehaviour
         // 2. 특수 화살 스킬인 경우 (Tier 2~4)
         if (skillNode.type == SkillType.Arrow && skillNode.tier != SkillTier.Tier5)
         {
-            // 새로운 특수 활을 찍으면 자동으로 활성화되도록 설정 (옵션)
+            // [추가] "일반 활"이 해금될 때(Start) 목록 갱신
+            if (skillNode.skillName == "일반 활")
+            {
+                UpdateUnlockedArrowList();
+            }
+
+            // 새로운 특수 활을 찍으면 자동으로 활성화되도록 설정
             SelectActiveArrowSkill(skillNode);
         }
 
@@ -247,6 +270,36 @@ public class SkillManager : MonoBehaviour
         {
             activeArrowSkill = arrowSkill;
             // PlayerShooting의 발사 로직에서 이 정보를 사용합니다.
+            OnActiveArrowChanged.Invoke(activeArrowSkill);
         }
+    }
+
+    /// <summary>
+    /// [추가] 해금된 화살 목록을 갱신합니다. (Tier 1 -> 4 순으로 정렬)
+    /// </summary>
+    private void UpdateUnlockedArrowList()
+    {
+        unlockedArrowSkills = unlockedSkills
+            .Where(n => n.type == SkillType.Arrow && n.tier != SkillTier.Tier5)
+            .OrderBy(n => n.tier) // Tier 1 (일반 활)이 항상 처음
+            .ThenBy(n => n.skillName) // 같은 티어는 이름순
+            .ToList();
+    }
+
+    /// <summary>
+    /// [추가] 다음 활성 화살 스킬로 교체합니다. (PlayerShooting이 호출)
+    /// </summary>
+    public void SelectNextArrowSkill()
+    {
+        if (unlockedArrowSkills.Count <= 1) return; // "일반 활" 하나뿐이면 교체 안 함
+
+        // 현재 활성 스킬의 인덱스를 찾습니다.
+        int currentIndex = unlockedArrowSkills.IndexOf(activeArrowSkill);
+
+        // 다음 인덱스를 계산합니다. (목록 끝이면 처음으로 돌아감)
+        int nextIndex = (currentIndex + 1) % unlockedArrowSkills.Count;
+
+        // 다음 스킬을 활성화합니다.
+        SelectActiveArrowSkill(unlockedArrowSkills[nextIndex]);
     }
 }
