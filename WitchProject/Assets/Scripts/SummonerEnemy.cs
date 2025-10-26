@@ -42,6 +42,21 @@ public class SummonerEnemy : BaseEnemy
     [SerializeField] private float chargeDuration = 1.0f;
 
 
+    protected override void Awake()
+    {
+        base.Awake();
+    }
+    protected override void OnEnable()
+    {
+        base.OnEnable();
+
+    }
+    protected override void OnDisable()
+    {
+        base.OnDisable();
+
+    }
+
     // [수정] Start() 함수
     public override void Start()
     {

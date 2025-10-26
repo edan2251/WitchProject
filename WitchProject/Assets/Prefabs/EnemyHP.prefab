@@ -198,7 +198,7 @@ GameObject:
   - component: {fileID: 9216047276890217409}
   - component: {fileID: 7523887351861918434}
   m_Layer: 5
-  m_Name: ZombieHP
+  m_Name: EnemyHP
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

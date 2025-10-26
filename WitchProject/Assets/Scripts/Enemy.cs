@@ -40,10 +40,16 @@ public class Enemy : BaseEnemy
     [Header("Sight Check")]
     [SerializeField] private LayerMask sightObstructionLayers; // 시야를 가리는 벽/장애물 레이어
 
+    protected override void Awake()
+    {
+        base.Awake();
+    }
 
     // [추가] 오브젝트 활성화 시 리스트에 추가
-    void OnEnable()
+    protected override void OnEnable()
     {
+        base.OnEnable();
+
         if (!allGoblins.Contains(this))
         {
             allGoblins.Add(this);
@@ -51,8 +57,10 @@ public class Enemy : BaseEnemy
     }
 
     // [추가] 오브젝트 비활성화/파괴 시 리스트에서 제거
-    void OnDisable()
+    protected override void OnDisable()
     {
+        base.OnDisable();
+
         if (allGoblins.Contains(this))
         {
             allGoblins.Remove(this);

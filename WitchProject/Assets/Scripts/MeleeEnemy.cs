@@ -22,6 +22,21 @@ public class MeleeEnemy : BaseEnemy
     private Transform player;
     private float lastAttackTime;
 
+    protected override void Awake()
+    {
+        base.Awake();
+    }
+    protected override void OnEnable()
+    {
+        base.OnEnable();
+
+    }
+    protected override void OnDisable()
+    {
+        base.OnDisable();
+
+    }
+
     // [수정] Start() 함수 - BaseEnemy의 기능을 먼저 실행하고, 중복 코드 제거
     public override void Start()
     {

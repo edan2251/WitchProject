@@ -20,9 +20,15 @@ public abstract class BaseEnemy : MonoBehaviour
     private Coroutine flashCoroutine;
     private Coroutine lightningEffectCoroutine;
 
+    protected virtual void Awake()
+    {
+        currentHP = maxHp;
+    }
+
     // 'virtual' : 자식 스크립트가 이 함수를 덮어쓰거나 확장할 수 있게 함
     public virtual void Start()
     {
+
         // 1. 체력 설정
         if (enemyData != null)
         {
@@ -48,6 +54,25 @@ public abstract class BaseEnemy : MonoBehaviour
         if (enemyRenderer != null)
         {
             originalColor = enemyRenderer.material.color;
+        }
+    }
+
+    protected virtual void OnEnable()
+    {
+        // HealthBarManager가 존재하면 자신을 등록합니다.
+        if (HealthBarManager.Instance != null)
+        {
+            HealthBarManager.Instance.RegisterEnemy(this);
+        }
+    }
+
+    protected virtual void OnDisable()
+    {
+        // HealthBarManager가 (씬 종료 등으로) 먼저 사라지지 않았다면
+        // 자신을 등록 해제합니다.
+        if (HealthBarManager.Instance != null)
+        {
+            HealthBarManager.Instance.UnregisterEnemy(this);
         }
     }
 
