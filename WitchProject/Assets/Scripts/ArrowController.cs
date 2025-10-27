@@ -259,7 +259,7 @@ public class ArrowController : MonoBehaviour
     }
 
     // 화살을 오브젝트에 박히게 하는 로직
-    private void ApplyStickLogic(GameObject target)
+    protected virtual void ApplyStickLogic(GameObject target)
     {
         hasHitEnemy = true; // 중복 충돌 방지 플래그 설정
 

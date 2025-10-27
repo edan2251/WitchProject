@@ -29,4 +29,6 @@ public class SkillNodeData : ScriptableObject
 
     [Header("UI")]
     public Sprite skillIcon;
+
+    public float cooldown;
 }

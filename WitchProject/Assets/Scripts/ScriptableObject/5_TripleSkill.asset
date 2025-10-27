@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7de26ea8999230b4b97a7471395b6165, type: 3}
   m_Name: 5_TripleSkill
   m_EditorClassIdentifier: 
-  skillName: "5\uB4F1\uAE09 \uC5F0\uC18D\uD654\uC0B4"
+  skillName: "\uC5F0\uC18D\uD654\uC0B4 \uC2A4\uD0AC"
   tier: 4
   type: 3
   skillPointCost: 1
@@ -21,3 +21,5 @@ MonoBehaviour:
   requiredNodesForNextTier: 9
   parentNodes:
   - {fileID: 11400000, guid: d849090b84199194c86a5e0850fd583b, type: 2}
+  skillIcon: {fileID: 0}
+  cooldown: 5

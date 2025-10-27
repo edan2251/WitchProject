@@ -41,6 +41,10 @@ public class PlayerShooting : MonoBehaviour
     public GameObject arrowPrefab;      // 화살
     public Transform firePoint;
 
+    [Header("능력 프리팹")]
+    public GameObject dragonArrowPrefab; // 용 화살 프리팹
+    public GameObject windArrowPrefab;   // 바람 화살 프리팹
+
     public List<BowModelEntry> bowModels; // 인스펙터에서 설정할 활 모델 리스트
     public Transform bowSocket;           // 활이 생성될 위치 (예: 플레이어의 손)
     private GameObject currentBowInstance;  // 현재 활성화된 활 인스턴스
@@ -94,36 +98,60 @@ public class PlayerShooting : MonoBehaviour
 
     void Update()
     {
-        if (SkillUIManager.Instance != null && SkillUIManager.Instance.IsPanelOpen)
+        bool uiOpen = SkillUIManager.Instance != null && SkillUIManager.Instance.IsPanelOpen;
+
+        if (!uiOpen) // UI가 닫혀있을 때만 게임 입력 처리
+        {
+            // 화살 교체 (기존)
+            if (Input.GetKeyDown(KeyCode.X))
+            {
+                SkillManager.Instance?.SelectNextArrowSkill();
+                UpdateActiveBowModel(); // 외형 업데이트
+            }
+
+            // 조준 및 충전 (기존)
+            HandleBowInput();
+
+            // 원뿔 공격 (기존)
+            if (!isCharging && Input.GetMouseButtonDown(0)) // 충전 중 아닐 때 좌클릭
+            {
+                if (TryConeDamage()) return; // 근접 공격 성공 시 이후 로직 건너뛰기
+            }
+
+            // --- [★신규★] 능력 입력 ---
+            // 1. 용 스킬 (R - 토글)
+            if (Input.GetKeyDown(KeyCode.R))
+            {
+                SkillManager.Instance?.ToggleSkill(SkillManager.DRAGON_SKILL);
+            }
+
+            // 2. 연속 화살 스킬 (E - 활성화)
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                SkillManager.Instance?.TryActivateSkill(SkillManager.MULTISHOT_SKILL);
+            }
+
+            // 3. 바람 스킬 (Q - 토글)
+            if (Input.GetKeyDown(KeyCode.Q))
+            {
+                SkillManager.Instance?.ToggleSkill(SkillManager.WIND_SKILL);
+            }
+            // -----------------------------
+        }
+        else // UI 열리면 충전 상태 리셋
         {
             if (isCharging)
             {
                 isCharging = false;
                 currentChargeTime = 0f;
             }
-            return; // 이후의 모든 입력/공격 로직을 건너뜀
         }
 
-        if (Input.GetKeyDown(KeyCode.X))
-        {
-            SkillManager.Instance.SelectNextArrowSkill();
-            UpdateActiveBowModel();
-        }
-
-        if (isCharging)
+        // --- 충전 로직 (기존 - 필요시 약간 수정 가능) ---
+        if (isCharging) // UI 상태와 관계없이 충전은 진행될 수 있음
         {
             currentChargeTime += Time.deltaTime;
-        }
-
-        HandleBowInput();
-
-        // 조준 중이 아닐 때(isCharging=false) 좌클릭 시 근접 공격 시도
-        if (!isCharging && Input.GetMouseButtonDown(0))
-        {
-            if (TryConeDamage())
-            {
-                return;
-            }
+            // 여기서 충전 UI 게이지 업데이트 가능
         }
     }
 
@@ -299,32 +327,129 @@ public class PlayerShooting : MonoBehaviour
 
     void ShootArrow()
     {
-        if (arrowPrefab == null || firePoint == null) return;
-
+        // --- 사전 계산 ---
         float finalLaunchForce = Mathf.Clamp(currentChargeTime * chargeRate, 0f, launchForceMax);
-
-        if (finalLaunchForce < 5f)
+        if (finalLaunchForce < 5f) // 최소 충전 확인
         {
             currentChargeTime = 0f;
+            isCharging = false; // 충전 중지 확실히
             return;
         }
+        Vector3 aimDirection = Camera.main.transform.forward; // 또는 화면 중앙 레이캐스트
+        // 현재 선택된 기본 화살 종류 가져오기
+        SkillNodeData currentArrowSkill = SkillManager.Instance?.activeArrowSkill;
+        // 현재 기본 데미지 가져오기
+        int damage = currentArrowDamage;
 
-        Vector3 aimDirection = Camera.main.transform.forward;
 
-        GameObject arrow = Instantiate(arrowPrefab, firePoint.position, Quaternion.LookRotation(aimDirection));
+        // --- [★신규★] 능력 스킬 확인 ---
 
-        ArrowController ac = arrow.GetComponent<ArrowController>();
-        if (ac != null)
+        // 1. 용 스킬 토글 확인
+        if (SkillManager.Instance != null && SkillManager.Instance.IsSkillToggled(SkillManager.DRAGON_SKILL))
         {
-            ac.InitializeArrow(currentArrowDamage, SkillManager.Instance.activeArrowSkill, enemyLayer);
+            if (dragonArrowPrefab != null && firePoint != null)
+            {
+                Debug.Log("용 화살 발사!");
+                // 용 화살 프리팹 생성
+                GameObject dragonArrow = Instantiate(dragonArrowPrefab, firePoint.position, Quaternion.LookRotation(aimDirection));
+                Rigidbody dragonRb = dragonArrow.GetComponent<Rigidbody>();
+                // 용에게 힘 가하기 (충전된 힘? 고정된 힘?)
+                if (dragonRb != null) dragonRb.AddForce(aimDirection * finalLaunchForce, ForceMode.VelocityChange);
+                // TODO: DragonArrowController 초기화 필요시 (데미지 등 설정)
+
+                // 스킬 사용 처리: 토글 끄고 쿨다운 시작
+                SkillManager.Instance.UseToggledSkill(SkillManager.DRAGON_SKILL);
+            }
+            else Debug.LogError("용 화살 프리팹이 설정되지 않았습니다!");
         }
+        // 2. 바람 스킬 토글 확인
+        else if (SkillManager.Instance != null && SkillManager.Instance.IsSkillToggled(SkillManager.WIND_SKILL))
+        {
+            if (windArrowPrefab != null && firePoint != null)
+            {
+                Debug.Log("바람 화살 발사!");
+                // 바람 화살 프리팹 생성
+                GameObject windArrow = Instantiate(windArrowPrefab, firePoint.position, Quaternion.LookRotation(aimDirection));
+                // 이 프리팹에는 일반 ArrowController 또는 전용 WindArrowController가 붙어있을 수 있음
+                ArrowController ac = windArrow.GetComponent<ArrowController>(); // 또는 WindArrowController
+                                                                                // 일반 화살 초기화 사용?
+                if (ac != null) ac.InitializeArrow(damage, currentArrowSkill, enemyLayer);
 
-        Rigidbody rb = arrow.GetComponent<Rigidbody>();
-        if (rb == null) { rb = arrow.AddComponent<Rigidbody>(); }
+                Rigidbody windRb = windArrow.GetComponent<Rigidbody>();
+                // 힘 가하기
+                if (windRb != null) windRb.AddForce(aimDirection * finalLaunchForce, ForceMode.VelocityChange);
 
-        rb.AddForce(aimDirection * finalLaunchForce, ForceMode.VelocityChange);
+                // 스킬 사용 처리: 토글 끄고 쿨다운 시작
+                SkillManager.Instance.UseToggledSkill(SkillManager.WIND_SKILL);
+            }
+            else Debug.LogError("바람 화살 프리팹이 설정되지 않았습니다!");
+        }
+        // 3. 연속 화살 활성 상태 확인
+        else if (SkillManager.Instance != null && SkillManager.Instance.IsSkillActive(SkillManager.MULTISHOT_SKILL))
+        {
+            Debug.Log("연속 화살 발사!");
+            // 연속 발사 코루틴 시작
+            StartCoroutine(MultiShotCoroutine(aimDirection, finalLaunchForce, damage, currentArrowSkill));
+        }
+        // 4. 기본 화살 발사
+        else
+        {
+            if (arrowPrefab != null && firePoint != null)
+            {
+                Debug.Log("일반/특수 화살 발사!");
+                // 기본 화살 프리팹 생성
+                GameObject arrow = Instantiate(arrowPrefab, firePoint.position, Quaternion.LookRotation(aimDirection));
+                ArrowController ac = arrow.GetComponent<ArrowController>();
+                // 화살 초기화 (데미지, 스킬 종류 등 전달)
+                if (ac != null) ac.InitializeArrow(damage, currentArrowSkill, enemyLayer);
 
+                Rigidbody rb = arrow.GetComponent<Rigidbody>();
+                // 힘 가하기
+                if (rb != null) rb.AddForce(aimDirection * finalLaunchForce, ForceMode.VelocityChange);
+            }
+            else Debug.LogError("화살 프리팹이 설정되지 않았습니다!");
+        }
+        // -----------------------------
+
+        // 어떤 화살을 쐈든 충전 상태 리셋
         currentChargeTime = 0f;
+        isCharging = false;
+    }
+
+    // --- [★신규★] 연속 화살 코루틴 ---
+    private IEnumerator MultiShotCoroutine(Vector3 direction, float force, int damage, SkillNodeData skillData)
+    {
+        int shotsFired = 0;
+        while (shotsFired < 3) // 3발 발사
+        {
+            if (arrowPrefab != null && firePoint != null)
+            {
+                // 선택 사항: 발사마다 약간의 부정확도 추가
+                // Quaternion randomRot = Quaternion.Euler(Random.Range(-1f, 1f), Random.Range(-1f, 1f), 0);
+                // Vector3 shotDirection = randomRot * direction;
+                Vector3 shotDirection = direction; // 우선 정확하게 발사
+
+                // 화살 생성 및 초기화
+                GameObject arrow = Instantiate(arrowPrefab, firePoint.position, Quaternion.LookRotation(shotDirection));
+                ArrowController ac = arrow.GetComponent<ArrowController>();
+                if (ac != null) ac.InitializeArrow(damage, skillData, enemyLayer);
+
+                // 힘 가하기
+                Rigidbody rb = arrow.GetComponent<Rigidbody>();
+                if (rb != null) rb.AddForce(shotDirection * force, ForceMode.VelocityChange);
+
+                shotsFired++;
+            }
+            else
+            {
+                Debug.LogError("연속 화살 발사를 위한 화살 프리팹이 없습니다!");
+                yield break; // 프리팹 없으면 코루틴 중지
+            }
+
+            // 마지막 발사 후에는 기다리지 않음
+            if (shotsFired < 3)
+                yield return new WaitForSeconds(0.15f); // 0.15초 간격
+        }
     }
 
 
