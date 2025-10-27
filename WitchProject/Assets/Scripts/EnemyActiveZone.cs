@@ -5,7 +5,11 @@ public class EnemyActivationZone : MonoBehaviour
 {
     [Tooltip("이 구역과 함께 활성화/파괴될 모든 오브젝트 (적, 스포너, 테두리 등)")]
     [SerializeField]
-    private List<GameObject> managedObjects = new List<GameObject>(); // GameObject 리스트로 변경
+    private List<GameObject> managedObjects = new List<GameObject>(); // 현재 구역 관리 오브젝트
+
+    [Tooltip("플레이어 이탈 시 활성화될 다음 스테이지 오브젝트들 (다음 PuzzleManager, 횃불 3개, 다음 스포너 등)")]
+    [SerializeField]
+    private List<GameObject> objectsToActivateOnExit = new List<GameObject>();
 
     // [선택 사항] 테두리 렌더러 (자동으로 리스트에 추가하기 위함)
     private LineRenderer boundaryRenderer;
@@ -27,7 +31,7 @@ public class EnemyActivationZone : MonoBehaviour
 
     void Start()
     {
-        // ★★★ 시작 시 모든 관리 대상 오브젝트를 비활성화 ★★★
+        // 1. 현재 관리 대상 오브젝트 비활성화 (플레이어 진입 전까지)
         foreach (GameObject obj in managedObjects)
         {
             if (obj != null)
@@ -35,7 +39,17 @@ public class EnemyActivationZone : MonoBehaviour
                 obj.SetActive(false);
             }
         }
-        // 테두리도 비활성화 (만약 LineRenderer가 관리 대상에 포함된다면)
+
+        // 2. 다음 단계 오브젝트도 시작 시 비활성화 (안전장치. Unity 씬에서 미리 꺼두는 것이 일반적)
+        foreach (GameObject obj in objectsToActivateOnExit)
+        {
+            if (obj != null)
+            {
+                obj.SetActive(false);
+            }
+        }
+
+        // 테두리 비활성화 (만약 LineRenderer가 관리 대상에 포함된다면)
         if (boundaryRenderer != null)
         {
             boundaryRenderer.enabled = false;
@@ -71,17 +85,29 @@ public class EnemyActivationZone : MonoBehaviour
         // 플레이어가 나갔다면
         if (playerInside && other.CompareTag("PlayerTriggerZone"))
         {
-            playerInside = false; // 상태 변경 (필수는 아님)
-            Debug.Log("플레이어 이탈! 구역 및 관련 오브젝트 파괴.");
+            playerInside = false;
+            Debug.Log("플레이어 이탈! 다음 구역 활성화 및 현재 구역 파괴.");
 
+            // ★★★ [핵심 로직] 다음 단계 오브젝트 활성화 ★★★
+            ActivateNextPhaseObjects();
+
+            // 현재 구역 및 오브젝트 파괴
             DestroyZoneAndObjects();
+        }
+    }
 
-            // --- 다음 스테이지 로직 트리거 ---
-            // 예시: GameManager 같은 싱글톤 스크립트의 함수 호출
-            // if (GameManager.Instance != null)
-            // {
-            //     GameManager.Instance.StartNextStage();
-            // }
+    /// <summary>
+    /// 플레이어 이탈 시 다음 단계의 오브젝트들을 활성화합니다.
+    /// </summary>
+    private void ActivateNextPhaseObjects()
+    {
+        Debug.Log("다음 단계 오브젝트를 활성화합니다: 다음 PuzzleManager, 횃불 등.");
+        foreach (GameObject obj in objectsToActivateOnExit)
+        {
+            if (obj != null)
+            {
+                obj.SetActive(true);
+            }
         }
     }
 
