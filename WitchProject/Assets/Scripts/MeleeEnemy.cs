@@ -18,7 +18,7 @@ public class MeleeEnemy : BaseEnemy
     public float attackCooldown = 1.5f;
 
     // --- 비공개 변수 ---
-    private NavMeshAgent agent;
+    //private NavMeshAgent agent;
     //private Transform player;
     private float lastAttackTime;
 
@@ -44,7 +44,7 @@ public class MeleeEnemy : BaseEnemy
 
         //player = GameObject.FindGameObjectWithTag("Player").transform;
 
-        agent = GetComponent<NavMeshAgent>();
+        //agent = GetComponent<NavMeshAgent>();
         if (agent != null)
         {
             agent.speed = moveSpeed;

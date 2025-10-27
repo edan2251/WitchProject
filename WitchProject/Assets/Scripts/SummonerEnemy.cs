@@ -18,7 +18,7 @@ public class SummonerEnemy : BaseEnemy
     // ... (체력 관련 변수 삭제됨) ...
 
     // --- 공통 변수 (AI) ---
-    private NavMeshAgent agent;
+    //private NavMeshAgent agent;
     [SerializeField] private float traceRange = 15f;
     [SerializeField] private float moveSpeed = 3.5f;
 
@@ -64,7 +64,7 @@ public class SummonerEnemy : BaseEnemy
     {
         base.Start(); // 부모(BaseEnemy)의 Start() 호출
 
-        agent = GetComponent<NavMeshAgent>();
+        //agent = GetComponent<NavMeshAgent>();
 
         if (agent != null)
         {

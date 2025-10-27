@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using UnityEngine.AI;
 
 // abstract: 이 스크립트 자체는 인스펙터에 붙일 수 없고, 상속용으로만 쓰겠다는 의미
 public abstract class BaseEnemy : MonoBehaviour
@@ -20,6 +21,9 @@ public abstract class BaseEnemy : MonoBehaviour
     private Coroutine flashCoroutine;
     private Coroutine lightningEffectCoroutine;
 
+    [HideInInspector] 
+    public NavMeshAgent agent;
+
     [Header("Targeting")]
     [SerializeField] private float playerAggroRange = 8f; // 플레이어 어그로 범위
 
@@ -29,6 +33,8 @@ public abstract class BaseEnemy : MonoBehaviour
 
     protected virtual void Awake()
     {
+        agent = GetComponent<NavMeshAgent>();
+
         // 헬스바 매니저 인스턴스 캐싱
         healthBarManager = HealthBarManager.Instance;
 

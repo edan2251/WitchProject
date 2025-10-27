@@ -25,7 +25,7 @@ public class Enemy : BaseEnemy
 
     // --- 비공개 변수 ---
     //private Transform player;
-    private NavMeshAgent agent;
+    //private NavMeshAgent agent;
     private float lastAttackTime;
 
     [Header("Wandering & Separation")]
@@ -102,7 +102,7 @@ public class Enemy : BaseEnemy
         //player = GameObject.FindGameObjectWithTag("Player").transform;
         lastAttackTime = -attackCooldown; // 즉시 공격 쿨타임이 돌도록 설정
 
-        agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+        //agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
         if (agent != null)
         {
             agent.speed = moveSpeed;

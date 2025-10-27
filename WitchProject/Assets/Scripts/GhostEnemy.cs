@@ -41,7 +41,7 @@ public class GhostEnemy : BaseEnemy
     private Vector3 modelOriginalLocalPos; // 모델의 원래 로컬 Y위치
 
     // --- 비공개 변수 ---
-    private NavMeshAgent agent;
+    //private NavMeshAgent agent;
     //private Transform player;
     private bool isExploding = false;
 
@@ -67,7 +67,7 @@ public class GhostEnemy : BaseEnemy
 
         // 2. [GhostEnemy 고유 설정]
         //player = GameObject.FindGameObjectWithTag("Player")?.transform;
-        agent = GetComponent<NavMeshAgent>();
+        //agent = GetComponent<NavMeshAgent>();
         if (agent != null)
         {
             agent.speed = idleDashSpeed;

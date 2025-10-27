@@ -56,12 +56,14 @@ MonoBehaviour:
   lightningDamage: 2
   lightningLinePrefab: {fileID: 681974593478579213, guid: 2de4134375ad6654fb0c9976e411eb10,
     type: 3}
-  pullRadius: 8
-  pullForce: 5
-  pullDuration: 3
+  pullRadius: 12
+  pullForce: 6
+  pullDuration: 5
   pullLayerMask:
     serializedVersion: 2
     m_Bits: 64
+  pullEffectPrefab: {fileID: 8742657550958359052, guid: 6d4dec27c4d8bd14a9b2f7db5a7e5ce1,
+    type: 3}
 --- !u!23 &8706071138593189627
 MeshRenderer:
   m_ObjectHideFlags: 0
