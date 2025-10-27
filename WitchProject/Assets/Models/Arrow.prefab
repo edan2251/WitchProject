@@ -53,7 +53,7 @@ MonoBehaviour:
   bombDamage: 10
   lightningChainRange: 10
   lightningChainJumps: 10
-  lightningDamage: 1
+  lightningDamage: 2
   lightningLinePrefab: {fileID: 681974593478579213, guid: 2de4134375ad6654fb0c9976e411eb10,
     type: 3}
 --- !u!23 &8706071138593189627

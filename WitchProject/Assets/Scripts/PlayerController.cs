@@ -348,7 +348,7 @@ public class PlayerController : MonoBehaviour
         UpdateHPSlider();
     }
 
-    void Die()
+    public void Die()
     {
         Debug.Log("플레이어 사망!");
 
@@ -389,12 +389,16 @@ public class PlayerController : MonoBehaviour
             // 부활 불가능 (최종 사망)
             Debug.Log("최종 사망. 메인 메뉴로 돌아갑니다.");
 
-            // TODO: 여기에 게임 오버 UI 표시 또는 지연 시간 추가 가능
-            // yield return new WaitForSeconds(3f); // 예: 3초 후 이동
-
-            // 메인 메뉴 씬 로드 (씬 이름이 "MainMenu"라고 가정)
-            // 빌드 설정(File > Build Settings)에 MainMenu 씬이 포함되어 있어야 함
-            SceneManager.LoadScene("MainMenu"); // "MainMenu" 부분을 실제 메인 메뉴 씬 이름으로 변경하세요.
+            if (SceneFader.Instance != null)
+            {
+                SceneFader.Instance.FadeToScene("MainMenu"); // "MainMenu" 부분은 실제 씬 이름 사용
+            }
+            else
+            {
+                // SceneFader를 못찾는 비상시에는 그냥 씬 로드
+                Debug.LogWarning("SceneFader 인스턴스를 찾을 수 없습니다! 직접 씬을 로드합니다.");
+                SceneManager.LoadScene("MainMenu");
+            }
         }
     }
 }

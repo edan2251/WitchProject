@@ -49,7 +49,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gravityScale: 1
-  bombRadius: 5
+  bombRadius: 7
   bombDamage: 10
   lightningChainRange: 10
   lightningChainJumps: 10
