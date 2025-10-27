@@ -15,7 +15,7 @@ MonoBehaviour:
   skillName: "\uC5F0\uC18D\uD654\uC0B4 \uC2A4\uD0AC"
   tier: 4
   type: 3
-  skillPointCost: 1
+  skillPointCost: 2
   attackIncrease: 0
   healthIncrease: 0
   requiredNodesForNextTier: 9

@@ -2,10 +2,34 @@ using Cinemachine;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class PlayerController : MonoBehaviour
 {
+    [Header("Health & Stats")] // [★수정★] 헤더 정리
+    public int baseMaxHP = 100;
+    public int bonusMaxHP { get; private set; } = 0;
+    public int maxHP => baseMaxHP + bonusMaxHP;
+    public int currentHP;
+    public Slider hpSlider;
+
+    [Header("Resurrection")] // [★추가★] 부활 관련 변수
+    [Tooltip("최대 부활 횟수")]
+    public int maxResurrections = 1; // 최대 1번 부활
+    private int currentResurrections; // 남은 부활 횟수
+    [Tooltip("부활 시 스폰될 위치 (비어있으면 시작 위치 사용)")]
+    public Transform spawnPoint; // 스폰 지점 Transform
+    private Vector3 initialPosition; // 초기 시작 위치 저장용
+
+    [Header("Feedback")] // [★수정★] 헤더 정리
+    public Renderer playerRenderer;
+    private Color originalColor;
+    public Color poisonColor = new Color(0.5f, 1f, 0.5f, 1f);
+    public float flashDuration = 0.1f;
+    private bool isPoisoned = false;
+    private Coroutine poisonEffectCoroutine;
+
     private float currentSpeed;
     private float walkSpeed = 5f;
     private float runSpeed = 12f;
@@ -26,28 +50,6 @@ public class PlayerController : MonoBehaviour
 
     public int bonusAttack { get; private set; } = 0;
 
-    // [수정] maxHP -> baseMaxHP (기본 체력)
-    public int baseMaxHP = 100;
-    // [추가] 스킬로 인한 추가 체력
-    public int bonusMaxHP { get; private set; } = 0;
-    // [수정] 최종 최대 체력 (기본 + 보너스). 읽기 전용 프로퍼티로 변경
-    public int maxHP => baseMaxHP + bonusMaxHP;
-
-    public int currentHP;
-
-    public Slider hpSlider;
-
-    // [추가] 플레이어 외형 렌더러 (자식 오브젝트에 있다면 인스펙터에서 할당)
-    public Renderer playerRenderer;
-    private Color originalColor; // 원래 색상 저장용
-    public Color poisonColor = new Color(0.5f, 1f, 0.5f, 1f); // 독에 걸렸을 때의 초록빛
-    public float flashDuration = 0.1f; // 피격 시 빨갛게 깜빡이는 시간
-
-    // [추가] 중독 상태 추적용 변수
-    private bool isPoisoned = false;
-    // [추가] 색상 변경 코루틴 중복 실행 방지용
-    private Coroutine poisonEffectCoroutine;
-
     // --- 마우스 락 상태 변수 추가 ---
     private bool isCursorLocked = true;
 
@@ -56,31 +58,22 @@ public class PlayerController : MonoBehaviour
     {
         controller = GetComponent<CharacterController>();
 
-        // 주의: virtualCam에 CinemachinePOV가 붙어있지 않으면 이 줄은 에러를 일으킬 수 있습니다.
-        // 일반 3인칭 숄더뷰에서는 POV 대신 Transposer/Composer를 사용하는 경우가 많습니다.
         pov = virtualCam.GetCinemachineComponent<CinemachinePOV>();
-
-        currentHP = maxHP; // maxHP 프로퍼티(baseMaxHP + bonusMaxHP)를 사용
-        // hpSlider.value = 1f; // [수정] UpdateHPSlider() 호출로 대체
+        currentHP = maxHP;
         UpdateHPSlider();
-
-        currentSpeed = walkSpeed; // Initialize currentSpeed
-
-        // [추가] 렌더러 및 원래 색상 초기화
-        if (playerRenderer == null)
-        {
-            // 인스펙터에서 할당 안했으면 자식에서 찾아보기
-            playerRenderer = GetComponentInChildren<Renderer>();
-        }
-        if (playerRenderer != null)
-        {
-            originalColor = playerRenderer.material.color;
-        }
-
-        // --- 마우스 커서 락 초기 설정 ---
+        currentSpeed = walkSpeed;
+        if (playerRenderer == null) playerRenderer = GetComponentInChildren<Renderer>();
+        if (playerRenderer != null) originalColor = playerRenderer.material.color;
         SetCursorLock(true);
+        EnemyTargetManager.RegisterPlayer(this.transform); // 타겟 매니저 등록
 
-        EnemyTargetManager.RegisterPlayer(this.transform);
+        // [★추가★] 부활 횟수 및 스폰 위치 초기화
+        currentResurrections = maxResurrections;
+        initialPosition = transform.position; // 현재 시작 위치 저장
+        if (spawnPoint == null)
+        {
+            Debug.LogWarning("PlayerController: 스폰 지점(spawnPoint)이 설정되지 않았습니다. 시작 위치를 사용합니다.", this);
+        }
     }
 
     void Update()
@@ -357,6 +350,51 @@ public class PlayerController : MonoBehaviour
 
     void Die()
     {
-        Destroy(gameObject);
+        Debug.Log("플레이어 사망!");
+
+        // 1. 부활 가능한지 확인
+        if (currentResurrections > 0)
+        {
+            // 부활 가능
+            currentResurrections--; // 부활 횟수 차감
+            Debug.Log($"부활합니다! 남은 부활 횟수: {currentResurrections}");
+
+            // TODO: 여기에 부활 관련 이펙트(VFX, SFX) 재생 코드 추가 가능
+
+            // 플레이어 상태 리셋
+            currentHP = maxHP; // 체력 완전 회복
+            UpdateHPSlider(); // HP 슬라이더 갱신
+            velocity = Vector3.zero; // 낙하 속도 등 리셋 (선택적)
+
+            // 스폰 위치 결정 (설정된 spawnPoint 우선, 없으면 초기 위치)
+            Vector3 respawnPosition = (spawnPoint != null) ? spawnPoint.position : initialPosition;
+
+            // [★중요★] CharacterController를 잠시 비활성화하고 위치 이동 후 다시 활성화
+            // (controller.Move()는 순간이동에 적합하지 않음)
+            if (controller != null) controller.enabled = false;
+            transform.position = respawnPosition;
+            if (controller != null) controller.enabled = true;
+
+            // TODO: 독 상태 등 다른 디버프 효과 해제 로직 추가 가능
+            if (isPoisoned)
+            {
+                if (poisonEffectCoroutine != null) StopCoroutine(poisonEffectCoroutine);
+                isPoisoned = false;
+                if (playerRenderer != null) playerRenderer.material.color = originalColor;
+                poisonEffectCoroutine = null;
+            }
+        }
+        else
+        {
+            // 부활 불가능 (최종 사망)
+            Debug.Log("최종 사망. 메인 메뉴로 돌아갑니다.");
+
+            // TODO: 여기에 게임 오버 UI 표시 또는 지연 시간 추가 가능
+            // yield return new WaitForSeconds(3f); // 예: 3초 후 이동
+
+            // 메인 메뉴 씬 로드 (씬 이름이 "MainMenu"라고 가정)
+            // 빌드 설정(File > Build Settings)에 MainMenu 씬이 포함되어 있어야 함
+            SceneManager.LoadScene("MainMenu"); // "MainMenu" 부분을 실제 메인 메뉴 씬 이름으로 변경하세요.
+        }
     }
 }

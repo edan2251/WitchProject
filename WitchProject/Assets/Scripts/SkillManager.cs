@@ -104,25 +104,62 @@ public class SkillManager : MonoBehaviour
     /// </summary>
     public bool TryUnlockSkill(SkillNodeData skillNode)
     {
-        if (unlockedSkills.Contains(skillNode)) return false; // 이미 해금됨
+        // --- [★로그 추가 1★] 함수 시작 및 PlayerExperience 인스턴스 확인 ---
+        Debug.Log($"===== '{skillNode.skillName}' 해금 시도 시작 =====");
+        Debug.Log($"PlayerExperience 인스턴스 찾음: {PlayerExperience.Instance != null}");
+        // -----------------------------------------------------------------
+
+        if (unlockedSkills.Contains(skillNode))
+        {
+            Debug.LogWarning($"'{skillNode.skillName}'은(는) 이미 해금된 스킬입니다."); // 이미 해금된 경우 경고
+            return false;
+        }
 
         // PlayerExperience.Instance가 null일 경우 방지
         if (PlayerExperience.Instance == null)
         {
+            Debug.LogError("PlayerExperience 인스턴스를 찾을 수 없어 스킬 해금 불가!"); // null일 경우 에러
             return false;
         }
 
-        if (PlayerExperience.Instance.skillPoints < skillNode.skillPointCost) return false; // 스킬 포인트 부족
+        // --- [★로그 추가 2★] 스킬 포인트 확인 ---
+        Debug.Log($"보유 스킬 포인트: {PlayerExperience.Instance.skillPoints}, 필요 비용: {skillNode.skillPointCost}");
+        // ------------------------------------------
+        if (PlayerExperience.Instance.skillPoints < skillNode.skillPointCost)
+        {
+            Debug.Log($"'{skillNode.skillName}' 해금 실패: 스킬 포인트 부족."); // 실패 사유 로그
+            return false;
+        }
 
-        // 선행 노드 충족 검사
-        if (!CheckPrerequisites(skillNode)) return false;
+        // --- [★로그 추가 3★] 선행 스킬 조건 확인 ---
+        bool prereqsMet = CheckPrerequisites(skillNode);
+        Debug.Log($"'{skillNode.skillName}' 선행 조건 확인 결과: {prereqsMet}");
+        // --------------------------------------------
+        if (!prereqsMet)
+        {
+            Debug.Log($"'{skillNode.skillName}' 해금 실패: 선행 스킬 조건 불충족."); // 실패 사유 로그
+            return false;
+        }
 
-        // 상위 티어 잠금 해제 요구사항 충족 검사
-        if (!CheckTierUnlockRequirement(skillNode)) return false;
+        // --- [★로그 추가 4★] 티어 해금 조건 확인 ---
+        bool tierReqMet = CheckTierUnlockRequirement(skillNode);
+        Debug.Log($"'{skillNode.skillName}' (티어 {(int)skillNode.tier + 1}) 티어 조건 확인 결과: {tierReqMet}");
+        // ------------------------------------------
+        if (!tierReqMet)
+        {
+            Debug.Log($"'{skillNode.skillName}' 해금 실패: 티어 해금 조건 불충족."); // 실패 사유 로그
+            return false;
+        }
 
-        // 스킬 포인트 사용
+        // --- [★로그 추가 5★] 스킬 포인트 사용 시도 ---
+        Debug.Log($"모든 조건 충족. '{skillNode.skillName}' 스킬 포인트 사용 시도...");
+        // --------------------------------------------
         if (PlayerExperience.Instance.TrySpendSkillPoint(skillNode.skillPointCost))
         {
+            // --- [★로그 추가 6★] 해금 성공 ---
+            Debug.Log($"'{skillNode.skillName}' 해금 성공!");
+            // ----------------------------------
+
             unlockedSkills.Add(skillNode);
             ApplySkillEffects(skillNode);
 
@@ -132,14 +169,16 @@ public class SkillManager : MonoBehaviour
             }
 
             // 해금된 노드 개수 업데이트
-            unlockedNodesPerTier[skillNode.tier] = unlockedNodesPerTier.ContainsKey(skillNode.tier) ?
-                                                     unlockedNodesPerTier[skillNode.tier] + 1 : 1;
+            unlockedNodesPerTier[skillNode.tier] = unlockedNodesPerTier.GetValueOrDefault(skillNode.tier, 0) + 1;
 
             OnSkillUnlock.Invoke();
             return true;
         }
-
-        return false;
+        else // 혹시 모를 TrySpendSkillPoint 실패 경우
+        {
+            Debug.LogError($"'{skillNode.skillName}' 해금 실패: TrySpendSkillPoint 함수가 false 반환!");
+            return false;
+        }
     }
 
     public bool IsSkillUnlocked(SkillNodeData skillNode)

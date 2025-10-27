@@ -134,6 +134,8 @@ MonoBehaviour:
   maxHp: 5
   currentHP: 0
   flashDuration: 0.1
+  agent: {fileID: 0}
+  playerAggroRange: 8
   state: 0
   moveSpeed: 4
   chaseSpeed: 4

@@ -52,12 +52,15 @@ MonoBehaviour:
   maxHp: 0
   currentHP: 0
   flashDuration: 0.1
+  agent: {fileID: 0}
+  playerAggroRange: 8
   state: 0
   detectionRange: 15
   idleDashInterval: 2.5
   idleDashSpeed: 10
   idleDashRange: 14
   chaseSpeed: 18
+  chaseObjectiveSpeed: 10
   explodeTriggerRange: 3
   explodeDelay: 1
   explosionRadius: 6.5

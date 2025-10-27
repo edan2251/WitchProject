@@ -12,6 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dbca91610bb508243b29c6eaa53d690d, type: 3}
   m_Name: Big_witch
   m_EditorClassIdentifier: 
-  maxHealth: 30
+  maxHealth: 100
   attackDamage: 5
-  experienceGained: 100
+  experienceGained: 1000

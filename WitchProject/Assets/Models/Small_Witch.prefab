@@ -52,11 +52,14 @@ MonoBehaviour:
   maxHp: 0
   currentHP: 0
   flashDuration: 0.1
+  agent: {fileID: 0}
+  playerAggroRange: 8
   state: 0
-  damage: 5
+  damage: 3
   moveSpeed: 4
   attackRange: 2.5
   attackCooldown: 1.5
+  attackDelay: 0.7
 --- !u!195 &1207490344452574829
 NavMeshAgent:
   m_ObjectHideFlags: 0

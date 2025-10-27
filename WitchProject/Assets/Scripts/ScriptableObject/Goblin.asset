@@ -14,4 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxHealth: 5
   attackDamage: 3
-  experienceGained: 30
+  experienceGained: 25

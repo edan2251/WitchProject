@@ -23,6 +23,12 @@ public class PlayerShooting : MonoBehaviour
     private bool isAiming = false;
     [SerializeField] private float rotationSpeed = 15f;
 
+    [Tooltip("활 시위를 당길 때 적용될 마우스 감도 배율 (1.0 = 변화 없음, 0.5 = 절반)")]
+    [SerializeField] private float aimingSensitivityMultiplier = 0.5f;
+    private CinemachinePOV aimPovComponent; // 조준 카메라의 POV 컴포넌트
+    private float originalSensitivityX;   // 원래 X축 감도
+    private float originalSensitivityY;   // 원래 Y축 감도
+
     [Header("DOTween Settings")] // DOTween 관련 설정 추가
     [SerializeField] private float aimFOV = 40f;          // 조준 시 FOV
     [SerializeField] private float defaultFOV = 60f;      // 기본 FOV
@@ -76,7 +82,6 @@ public class PlayerShooting : MonoBehaviour
     void Start()
     {
         playerController = GetComponent<PlayerController>();
-
         cam = Camera.main;
         currentArrowDamage = baseArrowDamage;
 
@@ -87,9 +92,21 @@ public class PlayerShooting : MonoBehaviour
         {
             aimCam.Priority = 0;
             aimCam.m_Lens.FieldOfView = defaultFOV;
+
+            // [★추가★] 조준 카메라에서 CinemachinePOV 컴포넌트 찾기 및 원본 감도 저장
+            aimPovComponent = aimCam.GetCinemachineComponent<CinemachinePOV>();
+            if (aimPovComponent != null)
+            {
+                originalSensitivityX = aimPovComponent.m_HorizontalAxis.m_MaxSpeed;
+                originalSensitivityY = aimPovComponent.m_VerticalAxis.m_MaxSpeed;
+            }
+            else
+            {
+                Debug.LogWarning("PlayerShooting: 조준 카메라(aimCam)에 CinemachinePOV 컴포넌트가 없습니다. 감도 조절이 작동하지 않습니다.", this);
+            }
+            // --------------------------------------------------------------------
         }
 
-        // 시작 시 조준점 숨기기
         if (bowCrosshairUI != null)
         {
             bowCrosshairUI.SetActive(false);
@@ -237,38 +254,43 @@ public class PlayerShooting : MonoBehaviour
 
     void HandleBowInput()
     {
-        // 우클릭: 조준 시작
+        // 우클릭: 조준 시작 (감도 변경 여기서!)
         if (Input.GetMouseButtonDown(1))
         {
-            StartAiming();
+            StartAiming(); // StartAiming 내부에서 감도 낮춤
         }
 
-        // 우클릭 해제: 조준 종료
+        // 우클릭 해제: 조준 종료 (감도 변경 여기서!)
         if (Input.GetMouseButtonUp(1))
         {
-            StopAiming();
+            StopAiming(); // StopAiming 내부에서 감도 복구
         }
 
-        // 좌클릭: 시위 당기기 시작
+        // --- [★수정★] 감도 변경 로직 삭제 ---
+        // 좌클릭: 시위 당기기 시작 (감도 변경 없음)
         if (isAiming && Input.GetMouseButtonDown(0))
         {
             isCharging = true;
             currentChargeTime = 0f;
+            // ApplyAimingSensitivity(); // <-- 삭제!
         }
 
-        // 좌클릭 해제: 발사
-        if (isAiming && Input.GetMouseButtonUp(0))
+        // 좌클릭 해제: 발사 (감도 변경 없음)
+        if (isAiming && Input.GetMouseButtonUp(0) && isCharging)
         {
+            // RestoreSensitivity(); // <-- 삭제!
             ShootArrow();
-            isCharging = false;
+            // isCharging = false; // ShootArrow 내부에서 false로 설정됨
         }
 
-        // 조준 취소 시 충전 리셋
+        // 조준 취소 시 충전 리셋 (감도 변경 없음)
         if (!isAiming && isCharging)
         {
             isCharging = false;
             currentChargeTime = 0f;
+            // RestoreSensitivity(); // <-- 삭제!
         }
+        // ------------------------------------
     }
 
     void StartAiming()
@@ -277,16 +299,13 @@ public class PlayerShooting : MonoBehaviour
         isAiming = true;
         aimCam.Priority = 10;
 
-        if (bowCrosshairUI != null)
-        {
-            bowCrosshairUI.SetActive(true);
-        }
+        if (bowCrosshairUI != null) { bowCrosshairUI.SetActive(true); }
 
-        DOTween.To(() => aimCam.m_Lens.FieldOfView,
-                 x => aimCam.m_Lens.FieldOfView = x,
-                 aimFOV,
-                 fovDuration)
-               .SetEase(Ease.OutQuad);
+        // FOV 변경 (DOTween)
+        DOTween.To(() => aimCam.m_Lens.FieldOfView, x => aimCam.m_Lens.FieldOfView = x, aimFOV, fovDuration).SetEase(Ease.OutQuad);
+
+        // [★추가★] 조준 시작 시 감도 낮추기
+        ApplyAimingSensitivity();
     }
 
     void StopAiming()
@@ -295,16 +314,34 @@ public class PlayerShooting : MonoBehaviour
         isAiming = false;
         aimCam.Priority = 0;
 
-        if (bowCrosshairUI != null)
-        {
-            bowCrosshairUI.SetActive(false);
-        }
+        if (bowCrosshairUI != null) { bowCrosshairUI.SetActive(false); }
 
-        DOTween.To(() => aimCam.m_Lens.FieldOfView,
-                 x => aimCam.m_Lens.FieldOfView = x,
-                 defaultFOV,
-                 fovDuration)
-               .SetEase(Ease.OutQuad);
+        // FOV 변경 (DOTween)
+        DOTween.To(() => aimCam.m_Lens.FieldOfView, x => aimCam.m_Lens.FieldOfView = x, defaultFOV, fovDuration).SetEase(Ease.OutQuad);
+
+        // [★추가★] 조준 종료 시 감도 복구
+        RestoreSensitivity();
+    }
+
+    private void ApplyAimingSensitivity()
+    {
+        if (aimPovComponent != null)
+        {
+            aimPovComponent.m_HorizontalAxis.m_MaxSpeed = originalSensitivityX * aimingSensitivityMultiplier;
+            aimPovComponent.m_VerticalAxis.m_MaxSpeed = originalSensitivityY * aimingSensitivityMultiplier;
+        }
+    }
+
+    /// <summary>
+    /// 마우스 감도를 원래대로 복구합니다.
+    /// </summary>
+    private void RestoreSensitivity()
+    {
+        if (aimPovComponent != null)
+        {
+            aimPovComponent.m_HorizontalAxis.m_MaxSpeed = originalSensitivityX;
+            aimPovComponent.m_VerticalAxis.m_MaxSpeed = originalSensitivityY;
+        }
     }
 
     void LookAtCameraDirection()
