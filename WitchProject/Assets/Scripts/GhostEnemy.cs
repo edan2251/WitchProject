@@ -39,7 +39,6 @@ public class GhostEnemy : BaseEnemy
     private Vector3 modelOriginalLocalPos; // 모델의 원래 로컬 Y위치
 
     // --- 비공개 변수 ---
-    private NavMeshAgent agent;
     private Transform player;
     private bool isExploding = false;
 
@@ -57,7 +56,7 @@ public class GhostEnemy : BaseEnemy
         base.OnDisable();
 
     }
-
+     
     // [수정] Start() 함수
     public override void Start()
     {
@@ -84,18 +83,24 @@ public class GhostEnemy : BaseEnemy
 
     void Update()
     {
+        currentTarget = DetermineTarget();
+
         // --- 1. 상태 머신(FSM) 로직 ---
         if (player == null || agent == null || isExploding) return;
 
-        float distToPlayer = Vector3.Distance(transform.position, player.position);
+        float distToTarget = Vector3.Distance(transform.position, currentTarget.position);
 
         switch (state)
         {
             case GhostState.Idle:
-                HandleIdleState(distToPlayer);
+                if (distToTarget <= detectionRange)
+                {
+                    ChangeState(GhostState.Chase);
+                }
+                HandleIdleState(distToTarget);
                 break;
             case GhostState.Chase:
-                HandleChaseState(distToPlayer);
+                HandleChaseState(distToTarget);
                 break;
             case GhostState.Explode:
                 // 코루틴에서 처리
@@ -141,19 +146,21 @@ public class GhostEnemy : BaseEnemy
         }
     }
 
-    private void HandleChaseState(float distToPlayer)
+    private void HandleChaseState(float distToTarget)
     {
-        if (distToPlayer <= explodeTriggerRange)
+        if (distToTarget <= explodeTriggerRange)
         {
             ChangeState(GhostState.Explode);
         }
-        else if (distToPlayer > detectionRange * 1.2f)
+        // [수정] 타겟이 너무 멀어지면 Idle로 복귀
+        else if (distToTarget > detectionRange * 1.2f)
         {
             ChangeState(GhostState.Idle);
         }
         else
         {
-            agent.SetDestination(player.position);
+            // [수정] 플레이어가 아닌, 현재 타겟을 추적
+            agent.SetDestination(currentTarget.position);
         }
     }
 
