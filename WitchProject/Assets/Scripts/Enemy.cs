@@ -25,6 +25,7 @@ public class Enemy : BaseEnemy
 
     // --- 비공개 변수 ---
     private Transform player;
+    private NavMeshAgent agent;
     private float lastAttackTime;
 
     [Header("Wandering & Separation")]
@@ -97,12 +98,11 @@ public class Enemy : BaseEnemy
         // 1. [필수] 부모(BaseEnemy)의 Start()를 먼저 호출 (HP, 헬스바, 렌더러 설정)
         base.Start();
 
-        agent = GetComponent<NavMeshAgent>();
-        player = playerTarget;
-
         // 2. [Enemy 고유 설정]
+        player = GameObject.FindGameObjectWithTag("Player").transform;
         lastAttackTime = -attackCooldown; // 즉시 공격 쿨타임이 돌도록 설정
 
+        agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
         if (agent != null)
         {
             agent.speed = moveSpeed;
@@ -115,17 +115,16 @@ public class Enemy : BaseEnemy
     // [수정] FSM 로직 전체 변경
     void Update()
     {
-        currentTarget = DetermineTarget();
-
         if (player == null || agent == null) return;
 
         // FSM 상태 전환
         switch (state)
         {
             case EnemyState.Wander:
-                Wander();
-                // ... (공격 쿨타임 체크 로직 유지) ...
-                if (Time.time >= lastAttackTime + attackCooldown && currentTarget != null) // ★ 타겟 체크 추가
+                Wander(); // 순찰 및 거리 벌리기 로직 수행
+
+                // 공격 쿨타임이 다 찼는지 확인
+                if (Time.time >= lastAttackTime + attackCooldown)
                 {
                     state = EnemyState.MoveToAttack;
                     if (agent != null) agent.isStopped = false;
@@ -133,13 +132,13 @@ public class Enemy : BaseEnemy
                 break;
 
             case EnemyState.MoveToAttack:
-                MoveToTarget(); // ★ MoveToPlayer() 대신 MoveToTarget() 호출
+                MoveToPlayer(); // 플레이어 추적
 
-                float dist = Vector3.Distance(currentTarget.position, transform.position);
-                bool targetVisible = CanSeeTarget(); // ★ CanSeePlayer() 대신 CanSeeTarget() 호출 (아래 추가)
+                float dist = Vector3.Distance(player.position, transform.position);
+                bool playerVisible = CanSeePlayer();
 
                 // 공격 범위에 들어왔고, 시야가 확보되면 공격
-                if (dist < attackRange && targetVisible)
+                if (dist < attackRange && playerVisible)
                 {
                     state = EnemyState.Attack;
                     if (agent != null)
@@ -151,7 +150,8 @@ public class Enemy : BaseEnemy
                 break;
 
             case EnemyState.Attack:
-                AttackTargetOnceAndRun(); // ★ AttackOnceAndRun() 대신 AttackTargetOnceAndRun() 호출
+                // 공격은 한 프레임에 실행되고 바로 Wander로 복귀
+                AttackOnceAndRun();
                 break;
         }
     }
@@ -207,62 +207,6 @@ public class Enemy : BaseEnemy
                 agent.SetDestination(hit.position);
             }
         }
-    }
-
-    void MoveToTarget()
-    {
-        if (agent == null || currentTarget == null) return;
-
-        if (agent.speed != chaseSpeed)
-        {
-            agent.speed = chaseSpeed;
-        }
-        agent.SetDestination(currentTarget.position);
-    }
-
-    // [추가] 한 발 쏘고 바로 Wander 상태로 복귀하는 로직
-    void AttackTargetOnceAndRun()
-    {
-        if (agent == null) return;
-
-        if (!agent.isStopped)
-        {
-            agent.isStopped = true;
-            agent.ResetPath();
-        }
-
-        transform.LookAt(currentTarget.position); // ★ 타겟을 바라봄
-        ShootProjectile();
-
-        lastAttackTime = Time.time;
-        state = EnemyState.Wander;
-
-        if (agent != null)
-        {
-            agent.isStopped = false;
-        }
-    }
-
-    private bool CanSeeTarget()
-    {
-        if (currentTarget == null) return false;
-
-        Vector3 rayStart = transform.position;
-        Vector3 targetPosition = currentTarget.position + Vector3.up * 1.0f; // 타겟의 중앙을 조준
-        Vector3 direction = (targetPosition - rayStart).normalized;
-        float distance = Vector3.Distance(rayStart, targetPosition);
-
-        if (Physics.Raycast(rayStart, direction, out RaycastHit hit, distance, sightObstructionLayers))
-        {
-            // 타겟 트랜스폼의 루트(부모)가 currentTarget의 루트와 같으면 시야 확보
-            // (플레이어 태그로 비교하는 대신, 트랜스폼 자체를 비교해야 방어 타겟도 체크 가능)
-            if (hit.transform == currentTarget || hit.transform.root == currentTarget.root)
-            {
-                return true;
-            }
-            return false;
-        }
-        return true;
     }
 
     // [추가] 플레이어에게 이동하는 로직 (기존 TracePlayer와 동일)

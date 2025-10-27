@@ -19,7 +19,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &6288071407098199996
 Transform:
   m_ObjectHideFlags: 0
@@ -52,8 +52,6 @@ MonoBehaviour:
   maxHp: 0
   currentHP: 0
   flashDuration: 0.1
-  defenseTarget: {fileID: 0}
-  playerAggroRange: 7
   traceRange: 25
   moveSpeed: 2
   currentState: 0

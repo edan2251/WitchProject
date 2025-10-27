@@ -18,6 +18,7 @@ public class SummonerEnemy : BaseEnemy
     // ... (체력 관련 변수 삭제됨) ...
 
     // --- 공통 변수 (AI) ---
+    private NavMeshAgent agent;
     private Transform player;
     [SerializeField] private float traceRange = 15f;
     [SerializeField] private float moveSpeed = 3.5f;
@@ -74,18 +75,15 @@ public class SummonerEnemy : BaseEnemy
     // ... (Update, ChangeState, IdleUpdate, TraceUpdate 함수는 이전과 동일) ...
     void Update()
     {
-        currentTarget = DetermineTarget();
-
         if (player == null) return;
-        float distanceToTarget = Vector3.Distance(transform.position, currentTarget.position);
-
+        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
         switch (currentState)
         {
             case EnemyState.Idle:
-                IdleUpdate(distanceToTarget);
+                IdleUpdate(distanceToPlayer);
                 break;
             case EnemyState.Trace:
-                TraceUpdate(distanceToTarget);
+                TraceUpdate(distanceToPlayer);
                 break;
             case EnemyState.Summon_Charge:
                 break;
@@ -120,9 +118,9 @@ public class SummonerEnemy : BaseEnemy
         }
     }
 
-    void IdleUpdate(float distanceToTarget)
+    void IdleUpdate(float distanceToPlayer)
     {
-        if (distanceToTarget <= traceRange)
+        if (distanceToPlayer <= traceRange)
         {
             ChangeState(EnemyState.Trace);
         }
@@ -132,15 +130,15 @@ public class SummonerEnemy : BaseEnemy
         }
     }
 
-    void TraceUpdate(float distanceToTarget)
+    void TraceUpdate(float distanceToPlayer)
     {
         if (Time.time >= lastSummonTime + summonCooldown)
         {
             ChangeState(EnemyState.Summon_Charge);
         }
-        else if (distanceToTarget <= traceRange)
+        else if (distanceToPlayer <= traceRange)
         {
-            TraceTarget(); // ★ TracePlayer() 대신 TraceTarget() 호출
+            TracePlayer();
         }
         else
         {
@@ -210,16 +208,16 @@ public class SummonerEnemy : BaseEnemy
                 }
 
                 // 4. 'entry.minionPrefab'을 사용해 소환
-                Instantiate(entry.minionPrefab, spawnPosition, Quaternion.identity, transform);
+                Instantiate(entry.minionPrefab, spawnPosition, Quaternion.identity);
             }
         }
     }
 
-    void TraceTarget()
+    void TracePlayer()
     {
-        if (agent == null || currentTarget == null) return;
+        if (agent == null) return;
         agent.speed = moveSpeed;
-        agent.SetDestination(currentTarget.position);
+        agent.SetDestination(player.position);
     }
 
     // ... (피격/사망 로직은 BaseEnemy에 있으므로 삭제됨) ...

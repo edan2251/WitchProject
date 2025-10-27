@@ -1,6 +1,5 @@
 using UnityEngine;
 using System.Collections;
-using UnityEngine.AI;
 
 // abstract: 이 스크립트 자체는 인스펙터에 붙일 수 없고, 상속용으로만 쓰겠다는 의미
 public abstract class BaseEnemy : MonoBehaviour
@@ -20,16 +19,6 @@ public abstract class BaseEnemy : MonoBehaviour
     private Coroutine burnCoroutine;
     private Coroutine flashCoroutine;
     private Coroutine lightningEffectCoroutine;
-
-    [Header("Defense & Aggro")]
-    [Tooltip("적들이 우선 공격할 방어 목표물. 인스펙터에 할당하세요.")]
-    public Transform defenseTarget;
-    [Tooltip("플레이어가 이 거리 내로 오면 defenseTarget보다 플레이어를 우선 공격합니다.")]
-    public float playerAggroRange = 7f; // 플레이어 근접 어그로 범위
-
-    protected Transform playerTarget;
-    protected NavMeshAgent agent;
-    protected Transform currentTarget; // 현재 이동/공격할 최종 타겟
 
     protected virtual void Awake()
     {
@@ -66,39 +55,6 @@ public abstract class BaseEnemy : MonoBehaviour
         {
             originalColor = enemyRenderer.material.color;
         }
-
-        agent = GetComponent<NavMeshAgent>();
-
-        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-        if (playerObj != null)
-        {
-            playerTarget = playerObj.transform;
-        }
-    }
-
-    /// <summary>
-    /// 방어 타겟과 플레이어 사이의 우선순위를 결정하여 최종 타겟을 반환합니다.
-    /// </summary>
-    protected virtual Transform DetermineTarget()
-    {
-        if (playerTarget == null) return defenseTarget; // 플레이어가 없다면 방어 타겟 우선
-
-        float distanceToPlayer = Vector3.Distance(transform.position, playerTarget.position);
-
-        // 1. 플레이어가 근접 어그로 범위 내에 있으면 플레이어 우선
-        if (distanceToPlayer <= playerAggroRange)
-        {
-            return playerTarget;
-        }
-
-        // 2. 방어 타겟이 살아있고 설정되어 있으면 방어 타겟
-        if (defenseTarget != null)
-        {
-            return defenseTarget;
-        }
-
-        // 3. 방어 타겟이 없거나 멀리 있다면 플레이어 타겟을 유지
-        return playerTarget;
     }
 
     protected virtual void OnEnable()

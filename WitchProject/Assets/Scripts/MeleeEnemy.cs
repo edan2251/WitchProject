@@ -18,6 +18,7 @@ public class MeleeEnemy : BaseEnemy
     public float attackCooldown = 1.5f;
 
     // --- 비공개 변수 ---
+    private NavMeshAgent agent;
     private Transform player;
     private float lastAttackTime;
 
@@ -40,16 +41,14 @@ public class MeleeEnemy : BaseEnemy
     public override void Start()
     {
         base.Start();
-        agent = GetComponent<NavMeshAgent>();
 
         player = GameObject.FindGameObjectWithTag("Player").transform;
 
         agent = GetComponent<NavMeshAgent>();
-        player = playerTarget;
-
         if (agent != null)
         {
             agent.speed = moveSpeed;
+            // [수정] 멈추는 거리(stoppingDistance)를 attackRange와 일치시킵니다.
             agent.stoppingDistance = attackRange;
         }
 
@@ -58,27 +57,26 @@ public class MeleeEnemy : BaseEnemy
 
     void Update()
     {
-        currentTarget = DetermineTarget();
-
         if (player == null || agent == null) return;
 
+        float dist = Vector3.Distance(player.position, transform.position);
 
         // FSM (상태 머신)
         switch (state)
         {
             case EnemyState.Idle:
-                // 타겟이 정해지면 Trace 상태로 전환
-                if (currentTarget != null)
+                // 플레이어를 찾으면 즉시 추적 (무한 추적)
+                if (player != null)
                 {
                     state = EnemyState.Trace;
                 }
                 break;
 
             case EnemyState.Trace:
-                TraceTarget(); // ★ TraceTarget으로 변경
+                TracePlayer();
 
-                float dist = Vector3.Distance(currentTarget.position, transform.position);
-
+                // [수정] agent.stoppingDistance 대신 attackRange를 기준으로 검사합니다.
+                // agent.pathPending: 에이전트가 경로 계산 중인지 확인 (오류 방지)
                 if (!agent.pathPending && dist <= attackRange)
                 {
                     state = EnemyState.Attack;
@@ -91,52 +89,20 @@ public class MeleeEnemy : BaseEnemy
                 break;
 
             case EnemyState.Attack:
-                float distToTarget = Vector3.Distance(currentTarget.position, transform.position);
-
-                if (distToTarget > attackRange)
+                // [수정] 여기도 attackRange 기준으로 검사
+                if (dist > attackRange)
                 {
                     state = EnemyState.Trace;
-                    if (agent != null) agent.isStopped = false;
+                    if (agent != null)
+                    {
+                        agent.isStopped = false;
+                    }
                 }
                 else
                 {
-                    AttackTarget(); // ★ AttackTarget으로 변경
+                    AttackPlayer();
                 }
                 break;
-        }
-    }
-
-    void TraceTarget()
-    {
-        if (agent == null || currentTarget == null) return;
-        agent.SetDestination(currentTarget.position);
-    }
-
-    // [추가] 현재 타겟을 공격
-    void AttackTarget()
-    {
-        if (currentTarget == null) return;
-
-        Vector3 lookDirection = (currentTarget.position - transform.position).normalized;
-        lookDirection.y = 0;
-        transform.rotation = Quaternion.LookRotation(lookDirection);
-
-        if (Time.time >= lastAttackTime + attackCooldown)
-        {
-            lastAttackTime = Time.time;
-
-            // 타겟의 체력 컴포넌트를 찾아 데미지 적용
-            if (currentTarget.CompareTag("Player"))
-            {
-                PlayerController pc = currentTarget.GetComponent<PlayerController>();
-                if (pc != null) pc.TakeDamage(damage);
-            }
-            else
-            {
-                // 방어 목표물 데미지 (DefenseTargetHealth 사용)
-                DefenseTargetHealth dth = currentTarget.GetComponent<DefenseTargetHealth>();
-                if (dth != null) dth.TakeDamage(damage);
-            }
         }
     }
 
