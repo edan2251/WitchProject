@@ -22,14 +22,28 @@ public abstract class BaseEnemy : MonoBehaviour
 
     protected virtual void Awake()
     {
-        currentHP = maxHp;
+        // 헬스바 매니저 인스턴스 캐싱
+        healthBarManager = HealthBarManager.Instance;
+
+        // 렌더러 설정 (자식 Start에서 하던 것을 Awake로 이동)
+        enemyRenderer = GetComponentInChildren<Renderer>();
+        if (enemyRenderer != null)
+        {
+            originalColor = enemyRenderer.material.color;
+        }
     }
 
     // 'virtual' : 자식 스크립트가 이 함수를 덮어쓰거나 확장할 수 있게 함
     public virtual void Start()
     {
 
-        // 1. 체력 설정
+        
+    }
+
+    protected virtual void OnEnable()
+    {
+        // 1. 체력 설정 (가장 중요!)
+        // (Start에서 이 로직을 가져옴)
         if (enemyData != null)
         {
             currentHP = enemyData.maxHealth;
@@ -42,27 +56,26 @@ public abstract class BaseEnemy : MonoBehaviour
             Debug.LogError(gameObject.name + ": EnemyData가 할당되지 않았습니다!");
         }
 
-        // 2. 헬스바 매니저 등록
-        healthBarManager = FindObjectOfType<HealthBarManager>();
+        // 2. 렌더러(색상 변경용) 설정 (Awake에서 못 찾았을 경우 대비)
+        if (enemyRenderer == null)
+        {
+            enemyRenderer = GetComponentInChildren<Renderer>();
+            if (enemyRenderer != null)
+            {
+                originalColor = enemyRenderer.material.color;
+            }
+        }
+
+        // 3. 헬스바 매니저 등록
+        // (HealthBarManager가 먼저 로드되었는지 확인)
+        if (healthBarManager == null)
+        {
+            healthBarManager = HealthBarManager.Instance;
+        }
+
         if (healthBarManager != null)
         {
             healthBarManager.RegisterEnemy(this); // 'this' (BaseEnemy)를 매니저에 등록
-        }
-
-        // 3. 렌더러(색상 변경용) 설정
-        enemyRenderer = GetComponentInChildren<Renderer>();
-        if (enemyRenderer != null)
-        {
-            originalColor = enemyRenderer.material.color;
-        }
-    }
-
-    protected virtual void OnEnable()
-    {
-        // HealthBarManager가 존재하면 자신을 등록합니다.
-        if (HealthBarManager.Instance != null)
-        {
-            HealthBarManager.Instance.RegisterEnemy(this);
         }
     }
 
@@ -74,6 +87,12 @@ public abstract class BaseEnemy : MonoBehaviour
         {
             HealthBarManager.Instance.UnregisterEnemy(this);
         }
+
+        // [추가] 비활성화될 때 실행 중인 코루틴 정리
+        StopAllCoroutines();
+        burnCoroutine = null;
+        flashCoroutine = null;
+        lightningEffectCoroutine = null;
     }
 
     // 몬스터가 데미지를 받는 공통 함수
