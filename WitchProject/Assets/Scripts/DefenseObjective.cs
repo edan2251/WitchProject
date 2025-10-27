@@ -11,7 +11,8 @@ public class DefenseObjective : MonoBehaviour
 
     public UnityEvent OnObjectDestroyed;
 
-    // public Slider hpSlider; // HP 슬라이더 (필요시 주석 해제)
+    [Header("UI")]
+    public Slider hpSlider;
 
     // [★추가★] 피격 효과(VFX) 관련
     [Header("Feedback")]
@@ -27,7 +28,7 @@ public class DefenseObjective : MonoBehaviour
     void Start()
     {
         currentHP = maxHP;
-        // UpdateHPBar();
+        UpdateHPBar();
 
         // [★추가★] 시작할 때 코어의 원래 색상을 저장해둡니다.
         if (coreRenderer != null)
@@ -45,7 +46,7 @@ public class DefenseObjective : MonoBehaviour
         if (currentHP <= 0) return;
 
         currentHP -= damage;
-        // UpdateHPBar();
+        UpdateHPBar();
 
         // [★추가★] 데미지를 입으면 코어 깜빡임 코루틴을 실행합니다.
         FlashCore();
@@ -97,7 +98,7 @@ public class DefenseObjective : MonoBehaviour
         flashCoroutine = null;
     }
 
-    /*
+    
     void UpdateHPBar()
     {
         if (hpSlider != null)
@@ -105,5 +106,5 @@ public class DefenseObjective : MonoBehaviour
             hpSlider.value = (float)currentHP / maxHP;
         }
     }
-    */
+    
 }

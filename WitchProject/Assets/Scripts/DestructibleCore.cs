@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Events; // 이벤트를 사용하기 위해 추가
 using System.Collections;
+using UnityEngine.UI;
 
 /// <summary>
 /// 플레이어의 공격을 받아 파괴되는 오브젝트 스크립트입니다.
@@ -20,13 +21,16 @@ public class DestructibleCore : MonoBehaviour
     [Tooltip("코어가 파괴되었을 때 실행할 이벤트 (예: 다음 스테이지 문 열기)")]
     public UnityEvent OnCoreDestroyed;
 
+    [Header("UI")] 
+    public Slider hpSlider;
+
     private Color originalCoreColor;
     private Coroutine flashCoroutine;
 
     void Start()
     {
         currentHP = maxHP;
-
+        UpdateHPBar();
         if (coreRenderer != null)
         {
             // 재질(Material)의 인스턴스를 생성하여 원본 재질을 공유하지 않도록 합니다.
@@ -48,9 +52,9 @@ public class DestructibleCore : MonoBehaviour
         if (currentHP <= 0) return;
 
         currentHP -= damage;
+        UpdateHPBar();
         FlashCore();
 
-        // TODO: HP UI 업데이트가 필요하다면 여기서 호출
 
         if (currentHP <= 0)
         {
@@ -88,5 +92,14 @@ public class DestructibleCore : MonoBehaviour
         yield return new WaitForSeconds(flashDuration);
         coreRenderer.material.color = originalCoreColor;
         flashCoroutine = null;
+    }
+
+    void UpdateHPBar()
+    {
+        if (hpSlider != null)
+        {
+            // Slider의 value는 0~1 사이 값이므로 비율로 계산
+            hpSlider.value = (float)currentHP / maxHP;
+        }
     }
 }
