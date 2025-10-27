@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI; // UI (Text) 사용 시
+using System.Collections.Generic; // List를 사용하기 위해 추가
 
 public class DefenseStageManager : MonoBehaviour
 {
@@ -13,11 +14,16 @@ public class DefenseStageManager : MonoBehaviour
 
     // public Text timerText; // 타이머 UI
 
-    [Header("Stage End")]
-    public GameObject winObjects; // 성공 시 활성화할 오브젝트
-    public GameObject failObjects; // 실패 시 활성화할 오브젝트
+    [Header("Stage End Actions")]
+    [Tooltip("스테이지 성공 시 활성화될 오브젝트들")]
+    public List<GameObject> winObjectsToActivate; // [이름 변경] 성공 시 활성화 리스트
 
-    // [수정] 이 스크립트가 활성화될 때(즉, 스테이지가 시작될 때) 호출됩니다.
+    [Tooltip("스테이지 성공 시 파괴될 오브젝트들")]
+    public List<GameObject> winObjectsToDestroy;  // [★추가★] 성공 시 파괴 리스트
+
+    [Tooltip("스테이지 실패 시 파괴될 오브젝트들")]
+    public List<GameObject> failObjectsToDestroy; // [★수정★] 실패 시 파괴 리스트
+
     void OnEnable()
     {
         if (defenseObject == null)
@@ -36,9 +42,14 @@ public class DefenseStageManager : MonoBehaviour
         // 2. 방어 오브젝트가 파괴되면 HandleStageFail 함수를 호출하도록 연결
         defenseObject.OnObjectDestroyed.AddListener(HandleStageFail);
 
-        // 3. UI 초기화
-        winObjects?.SetActive(false);
-        failObjects?.SetActive(false);
+        // 3. [★수정★] 성공 시 활성화될 오브젝트들만 미리 비활성화
+        foreach (GameObject obj in winObjectsToActivate)
+        {
+            obj?.SetActive(false);
+        }
+
+        // (실패 시 활성화 리스트가 없으므로 해당 foreach문 삭제)
+
         // UpdateTimerUI();
     }
 
@@ -61,7 +72,21 @@ public class DefenseStageManager : MonoBehaviour
         Debug.Log("디펜스 성공!");
         EnemyTargetManager.EndDefenseStage(); // 타겟 매니저에게 스테이지 종료 알림
 
-        winObjects?.SetActive(true);
+        // [★수정★] 1. 성공 오브젝트 리스트 순회하며 "활성화"
+        foreach (GameObject obj in winObjectsToActivate)
+        {
+            obj?.SetActive(true);
+        }
+
+        // [★추가★] 2. 성공 시 "파괴"할 오브젝트 리스트 순회
+        foreach (GameObject obj in winObjectsToDestroy)
+        {
+            if (obj != null) // null 체크 후 파괴
+            {
+                Destroy(obj);
+            }
+        }
+
         this.enabled = false; // 이 매니저 비활성화
     }
 
@@ -71,7 +96,14 @@ public class DefenseStageManager : MonoBehaviour
         Debug.Log("디펜스 실패!");
         EnemyTargetManager.EndDefenseStage(); // 타겟 매니저에게 스테이지 종료 알림
 
-        failObjects?.SetActive(true);
+        // [★수정★] 실패 시 "파괴"할 오브젝트 리스트 순회
+        foreach (GameObject obj in failObjectsToDestroy)
+        {
+            if (obj != null) // null 체크 후 파괴
+            {
+                Destroy(obj);
+            }
+        }
 
         // 이미 리스너가 호출되었으므로 제거
         defenseObject.OnObjectDestroyed.RemoveListener(HandleStageFail);

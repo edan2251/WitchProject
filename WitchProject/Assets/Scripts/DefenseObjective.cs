@@ -1,5 +1,7 @@
 using UnityEngine;
-using UnityEngine.Events; // 이벤트 사용을 위해 추가
+using UnityEngine.Events;
+using System.Collections;
+using UnityEngine.UI; // Slider를 사용한다면
 
 public class DefenseObjective : MonoBehaviour
 {
@@ -7,16 +9,35 @@ public class DefenseObjective : MonoBehaviour
     public int maxHP = 1000;
     public int currentHP;
 
-    // [추가] 오브젝트가 파괴되었을 때 스테이지 매니저에게 알리기 위한 이벤트
     public UnityEvent OnObjectDestroyed;
 
-    // TODO: UI 슬라이더를 연결해서 체력바를 표시할 수 있습니다.
-    // public Slider hpSlider; 
+    // public Slider hpSlider; // HP 슬라이더 (필요시 주석 해제)
+
+    // [★추가★] 피격 효과(VFX) 관련
+    [Header("Feedback")]
+    [Tooltip("데미지를 입을 때 빨갛게 만들 자식 오브젝트의 Renderer")]
+    public Renderer coreRenderer; // "코어 콜리전" 오브젝트를 여기에 할당
+
+    [Tooltip("깜빡이는 시간")]
+    public float flashDuration = 0.1f;
+
+    private Color originalCoreColor; // 코어의 원래 색상 저장용
+    private Coroutine flashCoroutine;  // 깜빡임 코루틴 중복 방지용
 
     void Start()
     {
         currentHP = maxHP;
         // UpdateHPBar();
+
+        // [★추가★] 시작할 때 코어의 원래 색상을 저장해둡니다.
+        if (coreRenderer != null)
+        {
+            originalCoreColor = coreRenderer.material.color;
+        }
+        else
+        {
+            Debug.LogWarning("DefenseObjective: coreRenderer가 할당되지 않았습니다!", this);
+        }
     }
 
     public void TakeDamage(int damage)
@@ -25,6 +46,9 @@ public class DefenseObjective : MonoBehaviour
 
         currentHP -= damage;
         // UpdateHPBar();
+
+        // [★추가★] 데미지를 입으면 코어 깜빡임 코루틴을 실행합니다.
+        FlashCore();
 
         if (currentHP <= 0)
         {
@@ -37,11 +61,40 @@ public class DefenseObjective : MonoBehaviour
     {
         // 파괴되었음을 스테이지 매니저에게 알림
         OnObjectDestroyed?.Invoke();
-
-        // TODO: 파괴 이펙트(VFX, SFX) 재생
-
-        // 오브젝트 비활성화 (Destroy 대신)
         gameObject.SetActive(false);
+    }
+
+    // [★추가★] 코어 깜빡임 함수
+    private void FlashCore()
+    {
+        // 1. 코어 렌더러가 없으면 실행 중지
+        if (coreRenderer == null) return;
+
+        // 2. 이전에 실행 중이던 깜빡임 코루틴이 있다면 즉시 중지
+        // (빠르게 연속으로 맞을 때 색이 꼬이는 것을 방지)
+        if (flashCoroutine != null)
+        {
+            StopCoroutine(flashCoroutine);
+        }
+
+        // 3. 새 코루틴을 시작하고 변수에 저장
+        flashCoroutine = StartCoroutine(FlashCoreCoroutine());
+    }
+
+    // [★추가★] 실제 깜빡임 로직 (코루틴)
+    private IEnumerator FlashCoreCoroutine()
+    {
+        // 1. 코어의 색을 빨간색으로 변경
+        coreRenderer.material.color = Color.red;
+
+        // 2. 0.1초 (flashDuration) 만큼 대기
+        yield return new WaitForSeconds(flashDuration);
+
+        // 3. 코어의 색을 원래 색상으로 복구
+        coreRenderer.material.color = originalCoreColor;
+
+        // 4. 코루틴이 끝났으므로 변수를 비움
+        flashCoroutine = null;
     }
 
     /*

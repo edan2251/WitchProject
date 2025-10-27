@@ -44,34 +44,55 @@ public class ArrowController : MonoBehaviour
     // [수정] OnTriggerEnter 로직
     private void OnTriggerEnter(Collider other)
     {
-        if (hasHitEnemy) return; // 이미 무언가에 맞았다면 중복 실행 방지
+        if (hasHitEnemy) return; // 중복 충돌 방지
 
-        BaseEnemy hitEnemy = null;
-        bool isEnemy = other.TryGetComponent<BaseEnemy>(out hitEnemy);
-
-        // 적인, 플레이어가 아니고, 트리거가 아닌 물체(벽, 바닥 등)
-        bool isEnvironment = !other.isTrigger && !other.CompareTag("Player") && !isEnemy;
-
-        // 적 또는 환경(벽, 바닥 등)에 맞았을 때만 아래 로직 실행
-        if (isEnemy || isEnvironment)
+        // 1. 적(BaseEnemy)인지 확인
+        if (other.TryGetComponent<BaseEnemy>(out BaseEnemy hitEnemy))
         {
-            // 1. 중복 실행 방지 플래그를 가장 먼저 설정
             hasHitEnemy = true;
 
-            Vector3 hitPoint = isEnemy ? other.bounds.center : other.transform.position;
+            Vector3 hitPoint = other.bounds.center;
+
+            // 2. 특수 효과 적용 (폭탄, 번개 등)
             ApplySpecialArrowEffect(hitEnemy, hitPoint);
 
-            // 3. 기본 데미지 적용 (오직 '적'에게만)
-            if (isEnemy)
+            // 3. 기본 데미지 적용 (특수 효과로 안 죽었을 시)
+            if (hitEnemy != null)
             {
-                // (특수 효과로 이미 죽었을 수 있으므로 null 체크)
-                if (hitEnemy != null)
-                {
-                    hitEnemy.TakeDamage(arrowDamage);
-                }
+                hitEnemy.TakeDamage(arrowDamage);
             }
 
-            // 4. 화살 박기 (적 또는 환경)
+            // 4. 화살 박기
+            ApplyStickLogic(other.gameObject);
+            return; // 처리 완료
+        }
+
+        // 2.  파괴 가능한 코어(DestructibleCore)인지 확인
+        if (other.TryGetComponent<DestructibleCore>(out DestructibleCore core))
+        {
+            hasHitEnemy = true;
+
+            // (참고: 폭탄 화살이 코어에 맞으면 폭발하지 않습니다.
+            //       만약 코어에 맞아도 폭발하게 하려면 ApplySpecialArrowEffect(null, ...) 호출 필요)
+
+            // 코어에 기본 데미지만 적용
+            core.TakeDamage(arrowDamage);
+
+            // 화살 박기
+            ApplyStickLogic(other.gameObject);
+            return; // 처리 완료
+        }
+
+        // 3. 적도, 코어도 아닌 '환경' (벽, 바닥 등)인지 확인
+        // (플레이어 태그 무시, 트리거 무시)
+        if (!other.isTrigger && !other.CompareTag("Player"))
+        {
+            hasHitEnemy = true;
+
+            // [추가] 폭탄 화살은 벽에 맞아도 터져야 함
+            ApplySpecialArrowEffect(null, transform.position); // 첫 번째 인자로 null 전달
+
+            // 화살 박기
             ApplyStickLogic(other.gameObject);
         }
     }
@@ -88,7 +109,7 @@ public class ArrowController : MonoBehaviour
     }
 
 
-    private void ApplySpecialArrowEffect(BaseEnemy targetEnemy, Vector3 hitCenter) // targetEnemy는 null일 수 있음 (벽에 맞은 경우)
+    private void ApplySpecialArrowEffect(BaseEnemy targetEnemy, Vector3 hitCenter)
     {
         if (arrowSkillData == null || arrowSkillData.skillName == "일반 활")
         {
@@ -98,7 +119,6 @@ public class ArrowController : MonoBehaviour
         switch (arrowSkillData.skillName)
         {
             case "불 화살":
-                // 오직 '적'에게 맞았을 때만 점화
                 if (targetEnemy != null)
                 {
                     targetEnemy.ApplyBurnEffect(3, 0.2f, 1);
@@ -108,20 +128,14 @@ public class ArrowController : MonoBehaviour
             case "번개 화살":
                 if (targetEnemy != null)
                 {
+                    // ... (번개 화살 로직은 DestructibleCore와 상관 없으므로 동일) ...
                     HashSet<BaseEnemy> hitEnemies = new HashSet<BaseEnemy>();
                     hitEnemies.Add(targetEnemy);
-
-
-                    // 1. 첫 번째 적에게 데미지 (화살 기본 데미지)
-                    targetEnemy.TakeDamage(arrowDamage); // 첫 타격은 기본 데미지와 빨간색 깜빡임
-
-                    // 2. 첫 번째 적에게 파란색 효과 적용 (빨간색 깜빡임 위에 덮어씀)
+                    targetEnemy.TakeDamage(arrowDamage);
                     if (targetEnemy != null && targetEnemy.currentHP > 0)
                     {
                         targetEnemy.ApplyLightningEffect(0.5f);
                     }
-
-                    // 3. 화살 위치에서 첫 타겟까지 Line Renderer 생성
                     if (lightningLinePrefab != null)
                     {
                         GameObject lineGO = Instantiate(lightningLinePrefab, Vector3.zero, Quaternion.identity);
@@ -129,40 +143,39 @@ public class ArrowController : MonoBehaviour
                         if (lineRenderer != null)
                         {
                             lineRenderer.positionCount = 2;
-                            lineRenderer.SetPosition(0, transform.position); // 화살의 위치
-
-                            // [수정] targetEnemy.transform.position 대신 전달받은 'hitCenter' 사용
+                            lineRenderer.SetPosition(0, transform.position);
                             lineRenderer.SetPosition(1, hitCenter);
-
                             Destroy(lineGO, 0.5f);
                         }
                     }
-
-                    // [수정] 4. 연쇄 번개 시작 위치를 'hitCenter'로 전달
                     ChainLightning(hitCenter, lightningChainJumps, lightningChainRange, hitEnemies);
                 }
                 break;
 
             case "폭탄 화살":
-                // '어디에 맞든' (적, 벽) 화살의 현재 위치에서 폭발
+                // [★수정★] 이제 targetEnemy가 null이어도 (즉, 벽이나 코어에 맞아도) 폭발
 
-                // TODO: 여기에 폭발 이펙트(파티클) 생성 코드를 넣으세요.
-                // 예: Instantiate(explosionEffectPrefab, transform.position, Quaternion.identity);
+                // TODO: 폭발 이펙트 생성
+                // Instantiate(explosionEffectPrefab, transform.position, Quaternion.identity);
 
-                Collider[] hits = Physics.OverlapSphere(transform.position, bombRadius, enemyLayer);
+                // [★수정★] 폭발 데미지 (적 + 파괴 가능한 코어)
+                Collider[] hits = Physics.OverlapSphere(transform.position, bombRadius, enemyLayer | LayerMask.GetMask("Destructible")); // [★수정★] Destructible 레이어 추가
 
                 foreach (Collider hit in hits)
                 {
+                    // 1. 적인지 확인
                     if (hit.TryGetComponent<BaseEnemy>(out BaseEnemy enemy))
                     {
-                        // 1. 폭발 데미지 적용
                         enemy.TakeDamage(bombDamage);
-
-                        // 2. [수정] 생존한 적에게 화상 효과 적용
                         if (enemy != null && enemy.currentHP > 0)
                         {
                             enemy.ApplyBurnEffect(3, 0.2f, 1);
                         }
+                    }
+                    // 2. [★추가★] 파괴 가능한 코어인지 확인
+                    else if (hit.TryGetComponent<DestructibleCore>(out DestructibleCore core))
+                    {
+                        core.TakeDamage(bombDamage); // 폭발 데미지를 줌
                     }
                 }
                 break;
