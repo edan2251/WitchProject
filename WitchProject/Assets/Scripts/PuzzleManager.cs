@@ -8,6 +8,12 @@ using System.Linq;
 /// </summary>
 public class PuzzleManager : MonoBehaviour
 {
+    [Header("UI")]
+    [SerializeField]
+    private StageUIManager stageUIManager;
+    public string stageStartMessage = "[스테이지 2]\n모닥불 3개를 찾아서\n[E]키로 영혼을 불어넣으세요.";
+
+
     //  싱글톤 패턴: 어디서든 쉽게 접근할 수 있도록 Instance를 설정합니다.
     public static PuzzleManager Instance { get; private set; }
 
@@ -25,6 +31,29 @@ public class PuzzleManager : MonoBehaviour
 
     [Header("상태")]
     public bool isPuzzleCompleted = false;
+
+
+    void OnEnable()
+    {
+        if (MinionManager.Instance != null)
+        {
+            MinionManager.Instance.ClearAllMinions();
+        }
+        else
+        {
+            Debug.LogWarning($"{this.name}: MinionManager 인스턴스를 찾을 수 없어 미니언을 제거할 수 없습니다.", this);
+        }
+
+        if (stageUIManager != null)
+        {
+            stageUIManager.ShowAnnouncement(stageStartMessage);
+        }
+        else
+        {
+            Debug.LogError($"{this.name}: StageUIManager가 인스펙터에 할당되지 않았습니다!", this);
+        }
+    }
+
 
     private void Awake()
     {
@@ -66,7 +95,6 @@ public class PuzzleManager : MonoBehaviour
     private void CompletePuzzle()
     {
         isPuzzleCompleted = true;
-        Debug.Log(" 퍼즐 완료! 다음 단계로 넘어갑니다.");
 
         // 1. 파괴할 오브젝트 리스트를 순회하며 모두 파괴
         foreach (GameObject obj in objectsToDestroy)
@@ -74,7 +102,6 @@ public class PuzzleManager : MonoBehaviour
             if (obj != null)
             {
                 Destroy(obj);
-                Debug.Log(obj.name + " 파괴됨.");
             }
         }
 
@@ -84,7 +111,6 @@ public class PuzzleManager : MonoBehaviour
             if (obj != null)
             {
                 obj.SetActive(true);
-                Debug.Log(obj.name + " 활성화됨.");
             }
         }
 

@@ -8,6 +8,11 @@ using UnityEngine.UI;
 /// </summary>
 public class DestructibleCore : MonoBehaviour
 {
+    [Header("UI")]
+    [SerializeField]
+    private StageUIManager stageUIManager;
+    public string stageStartMessage = "[스테이지 4]\n마녀의 힘을 담은 코어가 모습을 드러냈습니다!\n전력을 다해 이것을 파괴하세요!";
+
     [Header("Core Stats")]
     public int maxHP = 500;
     public int currentHP;
@@ -26,6 +31,27 @@ public class DestructibleCore : MonoBehaviour
 
     private Color originalCoreColor;
     private Coroutine flashCoroutine;
+
+    void OnEnable()
+    {
+        if (MinionManager.Instance != null)
+        {
+            MinionManager.Instance.ClearAllMinions();
+        }
+        else
+        {
+            Debug.LogWarning($"{this.name}: MinionManager 인스턴스를 찾을 수 없어 미니언을 제거할 수 없습니다.", this);
+        }
+
+        if (stageUIManager != null)
+        {
+            stageUIManager.ShowAnnouncement(stageStartMessage);
+        }
+        else
+        {
+            Debug.LogError($"{this.name}: StageUIManager가 인스펙터에 할당되지 않았습니다!", this);
+        }
+    }
 
     void Start()
     {

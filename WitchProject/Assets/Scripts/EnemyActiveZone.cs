@@ -1,8 +1,14 @@
 using UnityEngine;
 using System.Collections.Generic; // List 사용 시 필요
+using UnityEngine.Events;
 
 public class EnemyActivationZone : MonoBehaviour
 {
+    [Header("UI")]
+    [SerializeField]
+    private StageUIManager stageUIManager;
+    public string stageStartMessage = "[스테이지 1]\n충분히 강해지세요.";
+
     [Tooltip("이 구역과 함께 활성화/파괴될 모든 오브젝트 (적, 스포너, 테두리 등)")]
     [SerializeField]
     private List<GameObject> managedObjects = new List<GameObject>(); // 현재 구역 관리 오브젝트
@@ -10,6 +16,15 @@ public class EnemyActivationZone : MonoBehaviour
     [Tooltip("플레이어 이탈 시 활성화될 다음 스테이지 오브젝트들 (다음 PuzzleManager, 횃불 3개, 다음 스포너 등)")]
     [SerializeField]
     private List<GameObject> objectsToActivateOnExit = new List<GameObject>();
+
+    [Tooltip("플레이어 이탈 시 실행될 유니티 이벤트")]
+    [SerializeField]
+    private UnityEvent onPlayerExitEvent;
+
+    [Header("UI References")] // [★추가★] 헤더
+    [Tooltip("안전 지대 경고 UI를 관리하는 매니저 (선택 사항)")]
+    [SerializeField]
+    private SafeAreaWarningManager warningManager;
 
     // [선택 사항] 테두리 렌더러 (자동으로 리스트에 추가하기 위함)
     private LineRenderer boundaryRenderer;
@@ -31,6 +46,15 @@ public class EnemyActivationZone : MonoBehaviour
 
     void Start()
     {
+        if (stageUIManager != null)
+        {
+            stageUIManager.ShowAnnouncement(stageStartMessage);
+        }
+        else
+        {
+            Debug.LogError($"{this.name}: StageUIManager가 인스펙터에 할당되지 않았습니다!", this);
+        }
+
         // 1. 현재 관리 대상 오브젝트 비활성화 (플레이어 진입 전까지)
         foreach (GameObject obj in managedObjects)
         {
@@ -81,14 +105,24 @@ public class EnemyActivationZone : MonoBehaviour
 
     private void OnTriggerExit(Collider other)
     {
-        // 플레이어가 나갔다면
+        // 플레이어가 (이 큰 구역을) 나갔다면
         if (playerInside && other.CompareTag("PlayerTriggerZone"))
         {
             playerInside = false;
 
+            // 1. 다음 단계 오브젝트 리스트 활성화 (동일)
             ActivateNextPhaseObjects();
 
-            // 현재 구역 및 오브젝트 파괴
+            // 2. 유니티 이벤트 실행 (동일)
+            onPlayerExitEvent?.Invoke();
+
+            // 3.  안전 지대 경고 텍스트 숨기기
+            if (warningManager != null)
+            {
+                warningManager.HideWarning();
+            }
+
+            // 4. 현재 구역 및 오브젝트 파괴 (동일)
             DestroyZoneAndObjects();
         }
     }

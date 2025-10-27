@@ -52,8 +52,12 @@ MonoBehaviour:
   maxHp: 0
   currentHP: 0
   flashDuration: 0.1
+  playerAggroRange: 8
   traceRange: 25
   moveSpeed: 2
+  orbitDistance: 13
+  orbitWanderRadius: 10
+  orbitWanderTimer: 5
   currentState: 0
   summonWave:
   - minionPrefab: {fileID: 5668865364594264190, guid: da04f681822147f4885ddc2bebbad7a3,
@@ -71,6 +75,7 @@ MonoBehaviour:
   minionSpawnRange: 16
   summonCooldown: 10
   chargeDuration: 0.5
+  minionsParentTransform: {fileID: 0}
 --- !u!136 &3273108112767778162
 CapsuleCollider:
   m_ObjectHideFlags: 0

@@ -19,7 +19,6 @@ public class SummonerEnemy : BaseEnemy
 
     // --- 공통 변수 (AI) ---
     private NavMeshAgent agent;
-    //private Transform player;
     [SerializeField] private float traceRange = 15f;
     [SerializeField] private float moveSpeed = 3.5f;
 
@@ -34,14 +33,18 @@ public class SummonerEnemy : BaseEnemy
     public EnemyState currentState = EnemyState.Idle;
 
     [Header("Summon Settings")]
-    // [수정] 단일 프리팹 대신 '소환 웨이브' 리스트를 사용
     [SerializeField] private List<SummonWaveEntry> summonWave;
-
 
     [SerializeField] private float minionSpawnRange = 3f;
     [SerializeField] private float summonCooldown = 10f;
     private float lastSummonTime = -10f;
     [SerializeField] private float chargeDuration = 1.0f;
+
+    [Header("Idle Wandering")]
+    [SerializeField] private float idleWanderRadius = 25f; // Idle 상태에서 배회하는 반경
+    [SerializeField] private float idleWanderTimer = 8f;   // 새 배회 지점을 찍는 주기
+    private float lastIdleWanderTime; // 마지막 배회 시간
+
 
 
     protected override void Awake()
@@ -51,27 +54,26 @@ public class SummonerEnemy : BaseEnemy
     protected override void OnEnable()
     {
         base.OnEnable();
-
     }
     protected override void OnDisable()
     {
         base.OnDisable();
-
     }
 
-    // [수정] Start() 함수
     public override void Start()
     {
         base.Start(); // 부모(BaseEnemy)의 Start() 호출
 
         agent = GetComponent<NavMeshAgent>();
-        //player = GameObject.FindGameObjectWithTag("Player")?.transform;
 
         if (agent != null)
         {
             agent.speed = moveSpeed;
         }
         ChangeState(EnemyState.Idle);
+
+        lastIdleWanderTime = -idleWanderTimer;
+
     }
 
     // ... (Update, ChangeState, IdleUpdate, TraceUpdate 함수는 이전과 동일) ...
@@ -79,17 +81,22 @@ public class SummonerEnemy : BaseEnemy
     {
         UpdateTarget();
 
-        if (currentTarget == null) return;
+        if (currentTarget == null && currentState != EnemyState.Idle)
+        {
+            // 타겟이 없는데 Idle 상태가 아니라면 Idle로 전환 (안전장치)
+            ChangeState(EnemyState.Idle);
+            return;
+        }
 
         float distanceToTarget = Vector3.Distance(transform.position, currentTarget.position);
 
         switch (currentState)
         {
             case EnemyState.Idle:
-                IdleUpdate(distanceToTarget); // [수정] distanceToTarget 전달
+                IdleUpdate(distanceToTarget);
                 break;
             case EnemyState.Trace:
-                TraceUpdate(distanceToTarget); // [수정] distanceToTarget 전달
+                TraceUpdate(distanceToTarget);
                 break;
             case EnemyState.Summon_Charge:
                 break;
@@ -101,23 +108,36 @@ public class SummonerEnemy : BaseEnemy
     private void ChangeState(EnemyState newState)
     {
         if (currentState == newState) return;
+
+        // --- 상태 나가기 (Exit) ---
         if (currentState == EnemyState.Summon_Charge)
         {
             StopCoroutine("SummonSequence");
         }
-        currentState = newState;
+
+        currentState = newState; // 상태 변경
+
+        // --- 상태 들어가기 (Enter) ---
         if (agent != null)
         {
-            if (newState == EnemyState.Idle || newState == EnemyState.Summon_Charge || newState == EnemyState.Summon_Action)
+            // [★수정★] 상태별 isStopped 설정
+            switch (newState)
             {
-                agent.isStopped = true;
-                if (newState == EnemyState.Summon_Charge) agent.velocity = Vector3.zero;
-            }
-            else
-            {
-                agent.isStopped = false;
+                case EnemyState.Idle:
+                    agent.isStopped = false; // Idle 상태에서는 배회하므로 false
+                    lastIdleWanderTime = -idleWanderTimer; // Idle 상태 시작 시 즉시 새 배회 지점 찾도록
+                    break;
+                case EnemyState.Summon_Charge:
+                case EnemyState.Summon_Action:
+                    agent.isStopped = true; // 소환 중에는 멈춤
+                    if (newState == EnemyState.Summon_Charge) agent.velocity = Vector3.zero;
+                    break;
+                case EnemyState.Trace:
+                    agent.isStopped = false; // 추적/서성임 상태에서는 움직임
+                    break;
             }
         }
+
         if (newState == EnemyState.Summon_Charge)
         {
             StartCoroutine("SummonSequence");
@@ -126,52 +146,78 @@ public class SummonerEnemy : BaseEnemy
 
     void IdleUpdate(float distanceToTarget)
     {
+        // 1. 디펜스 모드면 즉시 추적
         if (EnemyTargetManager.IsDefenseStageActive)
         {
             ChangeState(EnemyState.Trace);
             return;
         }
-
-        // [수정] distanceToPlayer -> distanceToTarget (이제 정상 작동)
+        // 2. 일반 타겟이 감지 범위 안에 들어오면 추적
         if (distanceToTarget <= traceRange)
         {
             ChangeState(EnemyState.Trace);
+            return;
         }
-        else if (Time.time >= lastSummonTime + summonCooldown)
+        // 3. 소환 쿨타임이 다 됐으면 소환 준비
+        if (Time.time >= lastSummonTime + summonCooldown)
         {
             ChangeState(EnemyState.Summon_Charge);
+            return;
+        }
+
+        // 4. [★추가★] 위의 어떤 조건에도 해당하지 않으면 배회
+        WanderIdle();
+    }
+
+    void WanderIdle()
+    {
+        if (agent == null) return;
+
+        // [★추가★] 혹시 멈춰있다면 다시 움직이도록 설정
+        if (agent.isStopped) agent.isStopped = false;
+
+        // 타이머가 다 됐거나, 목적지에 도착했다면 새 목적지 설정
+        if (Time.time > lastIdleWanderTime + idleWanderTimer || (!agent.pathPending && agent.remainingDistance < 0.5f))
+        {
+            lastIdleWanderTime = Time.time;
+
+            // 현재 위치 기준으로 랜덤 방향 및 거리 설정
+            Vector3 randomDirection = Random.insideUnitSphere * idleWanderRadius;
+            randomDirection += transform.position;
+
+            // NavMesh 상의 유효 위치 탐색
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(randomDirection, out hit, idleWanderRadius, NavMesh.AllAreas))
+            {
+                // 새 목적지로 이동
+                agent.SetDestination(hit.position);
+            }
         }
     }
 
     void TraceUpdate(float distanceToTarget)
     {
-        // 1. 소환 쿨타임이 최우선
         if (Time.time >= lastSummonTime + summonCooldown)
         {
             ChangeState(EnemyState.Summon_Charge);
         }
-        // 2. 디펜스 모드가 "아닌데" 타겟이 너무 멀어졌을 때만 Idle로 복귀
         else if (!EnemyTargetManager.IsDefenseStageActive && distanceToTarget > traceRange)
         {
             ChangeState(EnemyState.Idle);
         }
-        // 3. [★수정★] 그 외 모든 추적/서성임 경우
         else
         {
-            // 3a. 타겟이 orbitDistance(7f)보다 멀리 있으면, 접근
             if (distanceToTarget > orbitDistance)
             {
-                TraceTarget(); // 기존 로직: 타겟에게 접근
+                TraceTarget();
             }
-            // 3b. 타겟이 orbitDistance(7f) 안에 들어왔으면, 서성거림
             else
             {
-                WanderNearTarget(); // 신규 로직: 주변 배회
+                WanderNearTarget();
             }
         }
     }
 
-    // ... (SummonSequence 코루틴은 이전과 동일) ...
     IEnumerator SummonSequence()
     {
         ChangeState(EnemyState.Summon_Charge);
@@ -186,7 +232,7 @@ public class SummonerEnemy : BaseEnemy
 
         ChangeState(EnemyState.Summon_Action);
 
-        PerformSummon(); // [수정] 이 함수가 새 로직을 사용
+        PerformSummon();
 
         if (enemyRenderer != null)
         {
@@ -196,7 +242,7 @@ public class SummonerEnemy : BaseEnemy
         lastSummonTime = Time.time;
 
         float distanceToTarget = Vector3.Distance(transform.position, currentTarget.position);
-        if (distanceToTarget <= traceRange) // [수정]
+        if (distanceToTarget <= traceRange)
         {
             ChangeState(EnemyState.Trace);
         }
@@ -207,33 +253,44 @@ public class SummonerEnemy : BaseEnemy
     }
 
 
-    // [수정] PerformSummon 함수가 리스트를 순회하도록 변경
+    // [★수정★] PerformSummon 함수
     void PerformSummon()
     {
-        // 1. 'summonWave' 리스트에 등록된 몬스터 종류(Entry)를 하나씩 순회
+        // [★추가★] 미니언 매니저에서 부모 Transform 가져오기
+        Transform parentTransform = null;
+        if (MinionManager.Instance != null)
+        {
+            parentTransform = MinionManager.Instance.MinionsParent;
+        }
+        else
+        {
+            Debug.LogError("SummonerEnemy: MinionManager 인스턴스를 찾을 수 없습니다!", this);
+            // 부모 없이 그냥 소환하거나, 여기서 리턴할 수 있습니다.
+            // 여기서는 일단 루트에 소환되도록 둡니다.
+        }
+
         foreach (SummonWaveEntry entry in summonWave)
         {
-            if (entry.minionPrefab == null)
-            {
-                Debug.LogWarning(gameObject.name + ": 소환 웨이브에 프리팹이 비어있습니다.");
-                continue; // 이 항목은 건너뛰고 다음 항목으로
-            }
+            if (entry.minionPrefab == null) { /* ... 경고 ... */ continue; }
 
-            // 2. 해당 몬스터를 'entry.count' 만큼 반복해서 소환
             for (int i = 0; i < entry.count; i++)
             {
-                // 3. 소환 위치 계산 (기존 로직과 동일)
+                // ... (spawnPosition 계산 로직 동일) ...
                 Vector2 randomCircle = Random.insideUnitCircle * minionSpawnRange;
                 Vector3 spawnPosition = transform.position + new Vector3(randomCircle.x, 0f, randomCircle.y);
-
                 NavMeshHit hit;
                 if (NavMesh.SamplePosition(spawnPosition, out hit, minionSpawnRange, NavMesh.AllAreas))
                 {
                     spawnPosition = hit.position;
                 }
 
-                // 4. 'entry.minionPrefab'을 사용해 소환
-                Instantiate(entry.minionPrefab, spawnPosition, Quaternion.identity);
+                GameObject spawnedMinion = Instantiate(entry.minionPrefab, spawnPosition, Quaternion.identity);
+
+                // [★수정★] MinionManager에서 가져온 parentTransform을 부모로 설정
+                if (parentTransform != null)
+                {
+                    spawnedMinion.transform.SetParent(parentTransform);
+                }
             }
         }
     }
@@ -249,29 +306,23 @@ public class SummonerEnemy : BaseEnemy
     {
         if (agent == null) return;
 
-        // 1. 속도 설정 (혹시 모르니)
         agent.speed = moveSpeed;
 
-        // 2. 타이머가 다 됐거나, 이미 목적지에 도착했다면
         if (Time.time > lastOrbitWanderTime + orbitWanderTimer || (!agent.pathPending && agent.remainingDistance < 0.5f))
         {
             lastOrbitWanderTime = Time.time;
 
-            // 3. 현재 위치(transform.position)를 기준으로 랜덤한 방향을 정함
             Vector3 randomDirection = Random.insideUnitSphere * orbitWanderRadius;
             randomDirection += transform.position;
 
-            // 4. NavMesh 상의 유효한 위치를 찾음
             NavMeshHit hit;
             if (NavMesh.SamplePosition(randomDirection, out hit, orbitWanderRadius, NavMesh.AllAreas))
             {
-                // 5. 새 목적지로 이동
                 agent.SetDestination(hit.position);
             }
         }
     }
 
-    // ... (OnDrawGizmosSelected 함수는 이전과 동일) ...
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.yellow;
