@@ -79,6 +79,8 @@ public class PlayerController : MonoBehaviour
 
         // --- 마우스 커서 락 초기 설정 ---
         SetCursorLock(true);
+
+        EnemyTargetManager.RegisterPlayer(this.transform);
     }
 
     void Update()

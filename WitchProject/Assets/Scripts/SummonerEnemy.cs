@@ -19,11 +19,15 @@ public class SummonerEnemy : BaseEnemy
 
     // --- 공통 변수 (AI) ---
     private NavMeshAgent agent;
-    private Transform player;
+    //private Transform player;
     [SerializeField] private float traceRange = 15f;
     [SerializeField] private float moveSpeed = 3.5f;
 
-    // ... (피격 관련 변수 삭제됨) ...
+    [Header("Summoner AI")]
+    [SerializeField] private float orbitDistance = 13f; // 이 거리 안으로 들어오면 서성거리기 시작
+    [SerializeField] private float orbitWanderRadius = 10f; // 서성거리는 반경
+    [SerializeField] private float orbitWanderTimer = 5f;  // 새 서성거리기 위치를 찍는 주기
+    private float lastOrbitWanderTime; // 마지막 서성거리기 시간
 
     // --- 소환술사 전용 변수 ---
     public enum EnemyState { Idle, Trace, Summon_Charge, Summon_Action }
@@ -33,8 +37,6 @@ public class SummonerEnemy : BaseEnemy
     // [수정] 단일 프리팹 대신 '소환 웨이브' 리스트를 사용
     [SerializeField] private List<SummonWaveEntry> summonWave;
 
-    // [삭제] [SerializeField] private GameObject minionPrefab;
-    // [삭제] [SerializeField] private int minionCount = 3;
 
     [SerializeField] private float minionSpawnRange = 3f;
     [SerializeField] private float summonCooldown = 10f;
@@ -63,7 +65,7 @@ public class SummonerEnemy : BaseEnemy
         base.Start(); // 부모(BaseEnemy)의 Start() 호출
 
         agent = GetComponent<NavMeshAgent>();
-        player = GameObject.FindGameObjectWithTag("Player")?.transform;
+        //player = GameObject.FindGameObjectWithTag("Player")?.transform;
 
         if (agent != null)
         {
@@ -75,15 +77,19 @@ public class SummonerEnemy : BaseEnemy
     // ... (Update, ChangeState, IdleUpdate, TraceUpdate 함수는 이전과 동일) ...
     void Update()
     {
-        if (player == null) return;
-        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+        UpdateTarget();
+
+        if (currentTarget == null) return;
+
+        float distanceToTarget = Vector3.Distance(transform.position, currentTarget.position);
+
         switch (currentState)
         {
             case EnemyState.Idle:
-                IdleUpdate(distanceToPlayer);
+                IdleUpdate(distanceToTarget); // [수정] distanceToTarget 전달
                 break;
             case EnemyState.Trace:
-                TraceUpdate(distanceToPlayer);
+                TraceUpdate(distanceToTarget); // [수정] distanceToTarget 전달
                 break;
             case EnemyState.Summon_Charge:
                 break;
@@ -118,9 +124,16 @@ public class SummonerEnemy : BaseEnemy
         }
     }
 
-    void IdleUpdate(float distanceToPlayer)
+    void IdleUpdate(float distanceToTarget)
     {
-        if (distanceToPlayer <= traceRange)
+        if (EnemyTargetManager.IsDefenseStageActive)
+        {
+            ChangeState(EnemyState.Trace);
+            return;
+        }
+
+        // [수정] distanceToPlayer -> distanceToTarget (이제 정상 작동)
+        if (distanceToTarget <= traceRange)
         {
             ChangeState(EnemyState.Trace);
         }
@@ -130,19 +143,31 @@ public class SummonerEnemy : BaseEnemy
         }
     }
 
-    void TraceUpdate(float distanceToPlayer)
+    void TraceUpdate(float distanceToTarget)
     {
+        // 1. 소환 쿨타임이 최우선
         if (Time.time >= lastSummonTime + summonCooldown)
         {
             ChangeState(EnemyState.Summon_Charge);
         }
-        else if (distanceToPlayer <= traceRange)
-        {
-            TracePlayer();
-        }
-        else
+        // 2. 디펜스 모드가 "아닌데" 타겟이 너무 멀어졌을 때만 Idle로 복귀
+        else if (!EnemyTargetManager.IsDefenseStageActive && distanceToTarget > traceRange)
         {
             ChangeState(EnemyState.Idle);
+        }
+        // 3. [★수정★] 그 외 모든 추적/서성임 경우
+        else
+        {
+            // 3a. 타겟이 orbitDistance(7f)보다 멀리 있으면, 접근
+            if (distanceToTarget > orbitDistance)
+            {
+                TraceTarget(); // 기존 로직: 타겟에게 접근
+            }
+            // 3b. 타겟이 orbitDistance(7f) 안에 들어왔으면, 서성거림
+            else
+            {
+                WanderNearTarget(); // 신규 로직: 주변 배회
+            }
         }
     }
 
@@ -170,8 +195,8 @@ public class SummonerEnemy : BaseEnemy
 
         lastSummonTime = Time.time;
 
-        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
-        if (distanceToPlayer <= traceRange)
+        float distanceToTarget = Vector3.Distance(transform.position, currentTarget.position);
+        if (distanceToTarget <= traceRange) // [수정]
         {
             ChangeState(EnemyState.Trace);
         }
@@ -213,14 +238,38 @@ public class SummonerEnemy : BaseEnemy
         }
     }
 
-    void TracePlayer()
+    void TraceTarget()
     {
         if (agent == null) return;
         agent.speed = moveSpeed;
-        agent.SetDestination(player.position);
+        agent.SetDestination(currentTarget.position);
     }
 
-    // ... (피격/사망 로직은 BaseEnemy에 있으므로 삭제됨) ...
+    void WanderNearTarget()
+    {
+        if (agent == null) return;
+
+        // 1. 속도 설정 (혹시 모르니)
+        agent.speed = moveSpeed;
+
+        // 2. 타이머가 다 됐거나, 이미 목적지에 도착했다면
+        if (Time.time > lastOrbitWanderTime + orbitWanderTimer || (!agent.pathPending && agent.remainingDistance < 0.5f))
+        {
+            lastOrbitWanderTime = Time.time;
+
+            // 3. 현재 위치(transform.position)를 기준으로 랜덤한 방향을 정함
+            Vector3 randomDirection = Random.insideUnitSphere * orbitWanderRadius;
+            randomDirection += transform.position;
+
+            // 4. NavMesh 상의 유효한 위치를 찾음
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(randomDirection, out hit, orbitWanderRadius, NavMesh.AllAreas))
+            {
+                // 5. 새 목적지로 이동
+                agent.SetDestination(hit.position);
+            }
+        }
+    }
 
     // ... (OnDrawGizmosSelected 함수는 이전과 동일) ...
     private void OnDrawGizmosSelected()

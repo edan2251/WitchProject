@@ -24,7 +24,7 @@ public class Enemy : BaseEnemy
     public Transform firePoint;
 
     // --- 비공개 변수 ---
-    private Transform player;
+    //private Transform player;
     private NavMeshAgent agent;
     private float lastAttackTime;
 
@@ -71,19 +71,19 @@ public class Enemy : BaseEnemy
     /// <summary>
     /// Raycast를 사용하여 플레이어가 적의 시야 내에 있는지 확인합니다. (벽 통과 사격 방지용)
     /// </summary>
-    private bool CanSeePlayer()
+    private bool CanSeeTarget(Transform target) // [수정] player -> target
     {
-        if (player == null) return false;
+        if (target == null) return false; // [수정]
 
         Vector3 rayStart = transform.position;
-        // [수정] 플레이어 가슴을 조준
-        Vector3 targetPosition = player.position + Vector3.up * 1.0f;
+        Vector3 targetPosition = target.position + Vector3.up * 1.0f; // [수정]
         Vector3 direction = (targetPosition - rayStart).normalized;
         float distance = Vector3.Distance(rayStart, targetPosition);
 
         if (Physics.Raycast(rayStart, direction, out RaycastHit hit, distance, sightObstructionLayers))
         {
-            if (hit.transform != player)
+            // [수정] 히트한 대상이 타겟 본인이거나 타겟의 자식이 아니면
+            if (hit.transform != target && !hit.transform.IsChildOf(target))
             {
                 return false;
             }
@@ -99,7 +99,7 @@ public class Enemy : BaseEnemy
         base.Start();
 
         // 2. [Enemy 고유 설정]
-        player = GameObject.FindGameObjectWithTag("Player").transform;
+        //player = GameObject.FindGameObjectWithTag("Player").transform;
         lastAttackTime = -attackCooldown; // 즉시 공격 쿨타임이 돌도록 설정
 
         agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
@@ -115,15 +115,14 @@ public class Enemy : BaseEnemy
     // [수정] FSM 로직 전체 변경
     void Update()
     {
-        if (player == null || agent == null) return;
+        UpdateTarget();
 
-        // FSM 상태 전환
+        if (currentTarget == null || agent == null) return;
+
         switch (state)
         {
             case EnemyState.Wander:
-                Wander(); // 순찰 및 거리 벌리기 로직 수행
-
-                // 공격 쿨타임이 다 찼는지 확인
+                Wander();
                 if (Time.time >= lastAttackTime + attackCooldown)
                 {
                     state = EnemyState.MoveToAttack;
@@ -132,25 +131,25 @@ public class Enemy : BaseEnemy
                 break;
 
             case EnemyState.MoveToAttack:
-                MoveToPlayer(); // 플레이어 추적
+                MoveToTarget(); // [수정] MoveToPlayer -> MoveToTarget
 
-                float dist = Vector3.Distance(player.position, transform.position);
-                bool playerVisible = CanSeePlayer();
+                // [수정] player.position -> currentTarget.position
+                float dist = Vector3.Distance(currentTarget.position, transform.position);
+                bool targetVisible = CanSeeTarget(currentTarget); // [수정]
 
-                // 공격 범위에 들어왔고, 시야가 확보되면 공격
-                if (dist < attackRange && playerVisible)
+                // [수정] playerVisible -> targetVisible
+                if (dist < attackRange && targetVisible)
                 {
                     state = EnemyState.Attack;
                     if (agent != null)
                     {
-                        agent.isStopped = true; // 공격 위해 정지
+                        agent.isStopped = true;
                         agent.ResetPath();
                     }
                 }
                 break;
 
             case EnemyState.Attack:
-                // 공격은 한 프레임에 실행되고 바로 Wander로 복귀
                 AttackOnceAndRun();
                 break;
         }
@@ -189,14 +188,13 @@ public class Enemy : BaseEnemy
             else
             {
                 // [수정] 2b. 플레이어 방향을 피해서 랜덤한 방향으로 순찰
-                Vector3 directionToPlayer = (player.position - transform.position).normalized;
-                int attempts = 0; // 무한 루프 방지용
-
+                Vector3 directionToTarget = (currentTarget.position - transform.position).normalized;
+                int attempts = 0;
                 do
                 {
                     finalDirection = Random.insideUnitSphere.normalized;
                     attempts++;
-                } while (Vector3.Angle(finalDirection, directionToPlayer) < 90f && attempts < 10);
+                } while (Vector3.Angle(finalDirection, directionToTarget) < 90f && attempts < 10); // [수정]
             }
 
             // 3. 최종 방향으로 wanderRadius만큼 떨어진 유효한 NavMesh 위치 탐색
@@ -210,31 +208,29 @@ public class Enemy : BaseEnemy
     }
 
     // [추가] 플레이어에게 이동하는 로직 (기존 TracePlayer와 동일)
-    void MoveToPlayer()
+    void MoveToTarget()
     {
         if (agent == null) return;
-
         if (agent.speed != chaseSpeed)
         {
             agent.speed = chaseSpeed;
         }
-
-        agent.SetDestination(player.position);
+        // [수정] player.position -> currentTarget.position
+        agent.SetDestination(currentTarget.position);
     }
 
     // [추가] 한 발 쏘고 바로 Wander 상태로 복귀하는 로직
     void AttackOnceAndRun()
     {
         if (agent == null) return;
-
         if (!agent.isStopped)
         {
             agent.isStopped = true;
             agent.ResetPath();
         }
 
-        transform.LookAt(player.position);
-        ShootProjectile();
+        transform.LookAt(currentTarget.position); // [수정] player.position -> currentTarget.position
+        ShootProjectile(); // (ShootProjectile이 알아서 currentTarget을 조준)
 
         lastAttackTime = Time.time;
         state = EnemyState.Wander;
@@ -253,14 +249,12 @@ public class Enemy : BaseEnemy
             EnemyProjectile ep = proj.GetComponent<EnemyProjectile>();
             if (ep != null)
             {
-                // [수정] 플레이어의 발(position)이 아닌, 1m 위(가슴)를 조준
-                Vector3 targetPosition = player.position + Vector3.up * 1.0f;
+                // [수정] player.position -> currentTarget.position
+                Vector3 targetPosition = currentTarget.position + Vector3.up * 1.0f;
                 Vector3 dir = (targetPosition - firePoint.position).normalized;
                 ep.SetDirection(dir);
             }
         }
     }
 
-    // [삭제] FlashOnHit(), FlashColor(), TakeDamage(), Die() 함수는
-    // BaseEnemy에 있으므로 여기서는 모두 삭제합니다.
 }

@@ -19,7 +19,7 @@ public class MeleeEnemy : BaseEnemy
 
     // --- 비공개 변수 ---
     private NavMeshAgent agent;
-    private Transform player;
+    //private Transform player;
     private float lastAttackTime;
 
     protected override void Awake()
@@ -42,7 +42,7 @@ public class MeleeEnemy : BaseEnemy
     {
         base.Start();
 
-        player = GameObject.FindGameObjectWithTag("Player").transform;
+        //player = GameObject.FindGameObjectWithTag("Player").transform;
 
         agent = GetComponent<NavMeshAgent>();
         if (agent != null)
@@ -57,23 +57,25 @@ public class MeleeEnemy : BaseEnemy
 
     void Update()
     {
-        if (player == null || agent == null) return;
+        UpdateTarget();
 
-        float dist = Vector3.Distance(player.position, transform.position);
+        if (currentTarget == null || agent == null) return;
+
+        float dist = Vector3.Distance(currentTarget.position, transform.position);
 
         // FSM (상태 머신)
         switch (state)
         {
             case EnemyState.Idle:
                 // 플레이어를 찾으면 즉시 추적 (무한 추적)
-                if (player != null)
+                if (currentTarget != null)
                 {
                     state = EnemyState.Trace;
                 }
                 break;
 
             case EnemyState.Trace:
-                TracePlayer();
+                TraceTarget();
 
                 // [수정] agent.stoppingDistance 대신 attackRange를 기준으로 검사합니다.
                 // agent.pathPending: 에이전트가 경로 계산 중인지 확인 (오류 방지)
@@ -100,7 +102,7 @@ public class MeleeEnemy : BaseEnemy
                 }
                 else
                 {
-                    AttackPlayer();
+                    AttackTarget();
                 }
                 break;
         }
@@ -109,19 +111,19 @@ public class MeleeEnemy : BaseEnemy
     /// <summary>
     /// 플레이어를 향해 이동합니다.
     /// </summary>
-    void TracePlayer()
+    void TraceTarget()
     {
         if (agent == null) return;
-        agent.SetDestination(player.position);
+        agent.SetDestination(currentTarget.position);
     }
 
     /// <summary>
     /// 플레이어를 근접 공격합니다. (몸통박치기)
     /// </summary>
-    void AttackPlayer()
+    void AttackTarget()
     {
         // 공격 시 플레이어를 바라봄 (선택적)
-        Vector3 lookDirection = (player.position - transform.position).normalized;
+        Vector3 lookDirection = (currentTarget.position - transform.position).normalized;
         lookDirection.y = 0; // Y축 회전은 고정
         transform.rotation = Quaternion.LookRotation(lookDirection);
 
@@ -130,15 +132,25 @@ public class MeleeEnemy : BaseEnemy
         {
             lastAttackTime = Time.time;
 
-            // 플레이어에게 직접 데미지를 줍니다.
-            PlayerController pc = player.GetComponent<PlayerController>();
-            if (pc != null)
+            if (currentTarget == playerTransform)
             {
-                pc.TakeDamage(damage);
+                // 1. 타겟이 플레이어일 때
+                PlayerController pc = currentTarget.GetComponent<PlayerController>();
+                if (pc != null)
+                {
+                    pc.TakeDamage(damage);
+                }
+            }
+            else if (currentTarget == defenseObjectTransform)
+            {
+                // 2. 타겟이 방어 오브젝트일 때
+                DefenseObjective obj = currentTarget.GetComponent<DefenseObjective>();
+                if (obj != null)
+                {
+                    obj.TakeDamage(damage);
+                }
             }
         }
     }
 
-    // [삭제] FlashOnHit(), FlashColor(), TakeDamage(), Die() 함수는
-    // BaseEnemy에 있으므로 여기서는 모두 삭제합니다.
 }

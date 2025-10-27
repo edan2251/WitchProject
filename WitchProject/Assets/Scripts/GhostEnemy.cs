@@ -20,6 +20,8 @@ public class GhostEnemy : BaseEnemy
 
     [Header("Chase & Explode")]
     [SerializeField] private float chaseSpeed = 18f;
+    [SerializeField] private float chaseObjectiveSpeed = 10f;
+
     [SerializeField] private float explodeTriggerRange = 2f;
     [SerializeField] private float explodeDelay = 0.3f;
     [SerializeField] private float explosionRadius = 5f;
@@ -40,7 +42,7 @@ public class GhostEnemy : BaseEnemy
 
     // --- 비공개 변수 ---
     private NavMeshAgent agent;
-    private Transform player;
+    //private Transform player;
     private bool isExploding = false;
 
     protected override void Awake()
@@ -64,7 +66,7 @@ public class GhostEnemy : BaseEnemy
         base.Start(); // 1. 부모 Start() 호출 (HP, 헬스바, 'enemyRenderer' 찾기)
 
         // 2. [GhostEnemy 고유 설정]
-        player = GameObject.FindGameObjectWithTag("Player")?.transform;
+        //player = GameObject.FindGameObjectWithTag("Player")?.transform;
         agent = GetComponent<NavMeshAgent>();
         if (agent != null)
         {
@@ -74,7 +76,6 @@ public class GhostEnemy : BaseEnemy
         lastIdleDashTime = -idleDashInterval;
 
         // 3. [추가] 둥실거림 효과를 위해 모델의 원래 로컬 위치 저장
-        // 'enemyRenderer'는 BaseEnemy의 Start()에서 'GetComponentInChildren'으로 찾아옵니다.
         if (enemyRenderer != null)
         {
             // 'enemyRenderer.transform'이 바로 모델(시각적 외형)의 트랜스폼입니다.
@@ -84,18 +85,22 @@ public class GhostEnemy : BaseEnemy
 
     void Update()
     {
-        // --- 1. 상태 머신(FSM) 로직 ---
-        if (player == null || agent == null || isExploding) return;
 
-        float distToPlayer = Vector3.Distance(transform.position, player.position);
+        UpdateTarget();
+
+
+        // --- 1. 상태 머신(FSM) 로직 ---
+        if (currentTarget == null || agent == null || isExploding) return;
+
+        float distToTarget = Vector3.Distance(transform.position, currentTarget.position);
 
         switch (state)
         {
             case GhostState.Idle:
-                HandleIdleState(distToPlayer);
+                HandleIdleState(distToTarget); // [수정] distToTarget 전달
                 break;
             case GhostState.Chase:
-                HandleChaseState(distToPlayer);
+                HandleChaseState(distToTarget); // [수정] distToTarget 전달
                 break;
             case GhostState.Explode:
                 // 코루틴에서 처리
@@ -125,12 +130,16 @@ public class GhostEnemy : BaseEnemy
         }
     }
 
-    // ... (HandleIdleState, HandleChaseState, ChangeState, IdleDash, ExplodeSequence, OnDrawGizmosSelected 함수는 이전과 동일하게 유지) ...
-    // ... (아래는 생략된 기존 함수들입니다. 수정할 필요 없습니다) ...
-
-    private void HandleIdleState(float distToPlayer)
+    private void HandleIdleState(float distToTarget)
     {
-        if (distToPlayer <= detectionRange)
+        if (EnemyTargetManager.IsDefenseStageActive)
+        {
+            ChangeState(GhostState.Chase);
+            return;
+        }
+
+        // [수정] distToPlayer -> distToTarget (이제 정상 작동)
+        if (distToTarget <= detectionRange)
         {
             ChangeState(GhostState.Chase);
         }
@@ -141,19 +150,33 @@ public class GhostEnemy : BaseEnemy
         }
     }
 
-    private void HandleChaseState(float distToPlayer)
+    private void HandleChaseState(float distToTarget)
     {
-        if (distToPlayer <= explodeTriggerRange)
+        // 1. 폭발 범위 체크 (동일)
+        if (distToTarget <= explodeTriggerRange)
         {
             ChangeState(GhostState.Explode);
         }
-        else if (distToPlayer > detectionRange * 1.2f)
+        // 2. 어그로 해제 체크 (동일)
+        else if (!EnemyTargetManager.IsDefenseStageActive && distToTarget > detectionRange * 1.2f)
         {
             ChangeState(GhostState.Idle);
         }
+        // 3.실제 추적 로직
         else
         {
-            agent.SetDestination(player.position);
+            // 타겟이 플레이어인지 확인하여 속도 차등 적용
+            if (currentTarget == playerTransform)
+            {
+                agent.speed = chaseSpeed; // 플레이어는 18f로 빠르게
+            }
+            else // (currentTarget == defenseObjectTransform)
+            {
+                agent.speed = chaseObjectiveSpeed; // 방어 오브젝트는 10f로 느리게
+            }
+
+            // 목적지 설정 (동일)
+            agent.SetDestination(currentTarget.position);
         }
     }
 
@@ -182,7 +205,7 @@ public class GhostEnemy : BaseEnemy
             case GhostState.Chase:
                 if (agent != null)
                 {
-                    agent.speed = chaseSpeed;
+                    // agent.speed = chaseSpeed;  <-- 이 줄을 삭제합니다.
                     agent.isStopped = false;
                 }
 
@@ -278,17 +301,32 @@ public class GhostEnemy : BaseEnemy
             Instantiate(explosionVFX, transform.position, Quaternion.identity);
         }
 
-        // 2. 플레이어 데미지 처리
-        if (player != null && Vector3.Distance(transform.position, player.position) <= explosionRadius)
+        // 2. [★수정★] 데미지 처리 (AOE)
+        // 자폭은 범위 공격이므로, 플레이어와 방어 대상 모두 범위 내에 있는지 확인합니다.
+
+        // 2a. 플레이어 데미지 처리
+        // [수정] player -> playerTransform (BaseEnemy에서 상속)
+        if (playerTransform != null && Vector3.Distance(transform.position, playerTransform.position) <= explosionRadius)
         {
-            PlayerController pc = player.GetComponent<PlayerController>();
+            PlayerController pc = playerTransform.GetComponent<PlayerController>();
             if (pc != null)
             {
                 pc.TakeDamage(explosionDamage);
             }
         }
 
-        // 3. 자폭 (중요: 헬스바를 수동으로 제거)
+        // 2b. [추가] 방어 오브젝트 데미지 처리
+        // [수정] defenseObjectTransform (BaseEnemy에서 상속)
+        if (defenseObjectTransform != null && Vector3.Distance(transform.position, defenseObjectTransform.position) <= explosionRadius)
+        {
+            DefenseObjective obj = defenseObjectTransform.GetComponent<DefenseObjective>();
+            if (obj != null)
+            {
+                obj.TakeDamage(explosionDamage);
+            }
+        }
+
+        // 3. 자폭 (동일)
         if (healthBarManager != null)
         {
             healthBarManager.UnregisterEnemy(this);

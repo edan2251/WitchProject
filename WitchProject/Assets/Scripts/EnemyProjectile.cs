@@ -45,26 +45,29 @@ public class EnemyProjectile : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
-        // 1. 태그 대신 'PlayerController' 스크립트를 먼저 찾습니다.
-        //    (부딪힌 오브젝트가 자식이든 부모든 스크립트를 찾아냅니다)
+        // 1. 플레이어를 먼저 찾습니다.
         PlayerController pc = other.GetComponentInParent<PlayerController>();
-        //Debug.Log("자찾기시작한다이잉ㅇ");
-        //Debug.Log("부딪힌 대상 이름: " + other.name + ", 태그: " + other.tag);
-        // 2. 'pc'를 찾았다면 (즉, 플레이어의 일부와 부딪혔다면)
         if (pc != null)
         {
-            //Debug.Log("진짜찾음");
-            // 2a. 데미지를 줍니다.
+            // 1a. 플레이어라면 독 데미지를 적용합니다.
             pc.ApplyPoisonDamage(initialHitDamage, poisonDamagePerTick, poisonInterval, poisonTicks, poisonChance);
-
-            // 2b. 투사체를 파괴합니다.
             Destroy(gameObject);
+            return; // 충돌 처리 완료
         }
-        // 3. 'pc'를 못 찾았다면 (플레이어가 아니라면)
-        else if (!other.CompareTag("Enemy")) // 그리고 그게 적도 아니라면 (벽, 바닥 등)
+
+        // 2. [추가] 플레이어가 아니라면, 방어 오브젝트인지 확인합니다.
+        DefenseObjective obj = other.GetComponentInParent<DefenseObjective>();
+        if (obj != null)
         {
-            //Debug.Log("이거뭐야진짜로");
-            // 3a. 투사체를 파괴합니다. (이건 다시 추가하는 게 좋습니다)
+            // 2a. 방어 오브젝트라면 일반 데미지를 줍니다. (독 효과 없음)
+            obj.TakeDamage(initialHitDamage);
+            Destroy(gameObject);
+            return; // 충돌 처리 완료
+        }
+
+        // 3. 플레이어도, 방어 오브젝트도 아니라면 (그리고 적도 아니라면)
+        if (!other.CompareTag("Enemy") && !other.CompareTag("Projectile")) // [수정] "Projectile" 태그도 무시
+        {
             Destroy(gameObject);
         }
     }

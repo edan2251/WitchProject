@@ -12,6 +12,7 @@ TagManager:
   - EnemyProjectile
   - PlayerTriggerZone
   - TriggerZone
+  - Projectile
   layers:
   - Default
   - TransparentFX

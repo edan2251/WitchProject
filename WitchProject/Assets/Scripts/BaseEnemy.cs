@@ -20,6 +20,13 @@ public abstract class BaseEnemy : MonoBehaviour
     private Coroutine flashCoroutine;
     private Coroutine lightningEffectCoroutine;
 
+    [Header("Targeting")]
+    [SerializeField] private float playerAggroRange = 8f; // 플레이어 어그로 범위
+
+    protected Transform playerTransform; // 플레이어의 Transform (고정)
+    protected Transform defenseObjectTransform; // 방어 오브젝트의 Transform
+    protected Transform currentTarget; // 적이 실제 추적/공격할 대상
+
     protected virtual void Awake()
     {
         // 헬스바 매니저 인스턴스 캐싱
@@ -36,8 +43,8 @@ public abstract class BaseEnemy : MonoBehaviour
     // 'virtual' : 자식 스크립트가 이 함수를 덮어쓰거나 확장할 수 있게 함
     public virtual void Start()
     {
-
         
+
     }
 
     protected virtual void OnEnable()
@@ -93,6 +100,57 @@ public abstract class BaseEnemy : MonoBehaviour
         burnCoroutine = null;
         flashCoroutine = null;
         lightningEffectCoroutine = null;
+    }
+
+    protected virtual void UpdateTarget()
+    {
+        if (playerTransform == null)
+        {
+            playerTransform = EnemyTargetManager.PlayerTarget;
+
+            // 아직도 플레이어 등록이 안됐으면, 어떤 타겟팅도 불가능하므로 종료
+            if (playerTransform == null)
+            {
+                currentTarget = null; // 확실하게 null로 설정
+                return;
+            }
+        }
+
+
+        // 2. 디펜스 스테이지가 아닌 경우 (평상시)
+        if (!EnemyTargetManager.IsDefenseStageActive)
+        {
+            currentTarget = playerTransform;
+            return;
+        }
+
+        // 3. 디펜스 스테이지인 경우
+
+        // 3a. 방어 오브젝트 정보가 없으면 가져오기
+        if (defenseObjectTransform == null)
+        {
+            defenseObjectTransform = EnemyTargetManager.DefenseTarget;
+            // 아직도 없으면(시작 중 딜레이 등) 일단 플레이어를 타겟
+            if (defenseObjectTransform == null)
+            {
+                currentTarget = playerTransform;
+                return;
+            }
+        }
+
+        // 3b. [핵심 로직] 플레이어와의 거리 계산
+        float distToPlayer = Vector3.Distance(transform.position, playerTransform.position);
+
+        if (distToPlayer <= playerAggroRange)
+        {
+            // 3c. 플레이어가 5f 안으로 들어오면 플레이어를 타겟
+            currentTarget = playerTransform;
+        }
+        else
+        {
+            // 3d. 플레이어가 5f 밖이면 방어 오브젝트를 타겟
+            currentTarget = defenseObjectTransform;
+        }
     }
 
     // 몬스터가 데미지를 받는 공통 함수
