@@ -26,4 +26,7 @@ public class SkillNodeData : ScriptableObject
 
     // 이 스킬을 찍기 위해 선행되어야 하는 스킬 노드들 (예: 폭탄 화살은 일반 활, 불 화살 필요)
     public SkillNodeData[] parentNodes;
+
+    [Header("UI")]
+    public Sprite skillIcon;
 }

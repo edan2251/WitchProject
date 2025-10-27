@@ -3,9 +3,17 @@ using System.Collections.Generic;
 using UnityEngine;
 using Cinemachine;
 using DG.Tweening; // DOTween 추가
+using System.Linq;
 
 public class PlayerShooting : MonoBehaviour
 {
+    [System.Serializable]
+    public class BowModelEntry
+    {
+        public string skillName; // SkillNodeData의 "skillName" (예: "일반 활")
+        public GameObject bowModelPrefab;
+    }
+
     PlayerController playerController;
 
     // [1] 무기 및 Cinemachine 설정
@@ -31,8 +39,12 @@ public class PlayerShooting : MonoBehaviour
     // 무기 프리팹 및 모델
     [Header("Weapon Prefabs & Models")]
     public GameObject arrowPrefab;      // 화살
-    public GameObject handedBow;        // 활 모델
     public Transform firePoint;
+
+    public List<BowModelEntry> bowModels; // 인스펙터에서 설정할 활 모델 리스트
+    public Transform bowSocket;           // 활이 생성될 위치 (예: 플레이어의 손)
+    private GameObject currentBowInstance;  // 현재 활성화된 활 인스턴스
+
     Camera cam;
 
     // ---------------------------------------------------------------------
@@ -65,6 +77,7 @@ public class PlayerShooting : MonoBehaviour
         currentArrowDamage = baseArrowDamage;
 
         UpdateWeaponVisibility();
+        UpdateActiveBowModel();
 
         if (aimCam != null)
         {
@@ -94,6 +107,7 @@ public class PlayerShooting : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.X))
         {
             SkillManager.Instance.SelectNextArrowSkill();
+            UpdateActiveBowModel();
         }
 
         if (isCharging)
@@ -136,13 +150,60 @@ public class PlayerShooting : MonoBehaviour
     // 무기 및 조준 관리
     //----------------------------------------------------------------------------------
 
+    void UpdateActiveBowModel()
+    {
+        if (bowSocket == null)
+        {
+            return;
+        }
+
+        // 1. SkillManager에서 현재 활성화된 SkillNodeData를 가져옵니다.
+        SkillNodeData currentSkillData = SkillManager.Instance.activeArrowSkill;
+
+        // 2. (방어 코드) 스킬 데이터가 null이면 (예: 게임 시작 직후) 아무것도 하지 않거나 기본 활을 표시합니다.
+        //    SkillManager의 Start()에서 "일반 활"을 바로 활성화하므로 이 경우는 거의 없어야 합니다.
+        if (currentSkillData == null)
+        {
+            if (currentBowInstance != null) Destroy(currentBowInstance); // 기존 활 숨기기
+            return;
+        }
+
+        // 3. 현재 활성 스킬의 이름(string)을 가져옵니다.
+        string currentSkillName = currentSkillData.skillName;
+
+        // 4. bowModels 리스트에서 일치하는 skillName을 가진 항목을 찾습니다.
+        BowModelEntry entry = bowModels.FirstOrDefault(m => m.skillName == currentSkillName);
+
+        // 5. 일치하는 프리팹이 리스트에 없으면 경고를 출력합니다.
+        if (entry == null || entry.bowModelPrefab == null)
+        {
+            if (currentBowInstance != null) Destroy(currentBowInstance); // 기존 활 숨기기
+            return;
+        }
+
+        // 6. 기존에 생성된 활이 있다면 파괴합니다.
+        if (currentBowInstance != null)
+        {
+            Destroy(currentBowInstance);
+        }
+
+        // 7. 새 활 프리팹을 bowSocket의 자식으로 생성합니다.
+        currentBowInstance = Instantiate(entry.bowModelPrefab, bowSocket.position, bowSocket.rotation, bowSocket);
+
+        // 8. (권장) 생성된 인스턴스의 로컬 위치/회전을 리셋하여 소켓에 정확히 맞춥니다.
+        currentBowInstance.transform.localPosition = Vector3.zero;
+        currentBowInstance.transform.localRotation = Quaternion.identity;
+    }
+
+
     void UpdateWeaponVisibility()
     {
-        if (handedBow != null) handedBow.SetActive(true);
+        // if (handedBow != null) handedBow.SetActive(true); // [삭제]
+
         if (isAiming) StopAiming();
         if (bowCrosshairUI != null)
         {
-            bowCrosshairUI.SetActive(isAiming);
+            bowCrosshairUI.SetActive(isAiming); // isAiming은 Start()에서 false이므로 숨겨집니다.
         }
     }
 
