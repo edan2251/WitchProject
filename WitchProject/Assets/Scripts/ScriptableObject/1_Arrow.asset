@@ -20,3 +20,4 @@ MonoBehaviour:
   healthIncrease: 0
   requiredNodesForNextTier: 1
   parentNodes: []
+  skillIcon: {fileID: 21300000, guid: 22c5eb9189b71d94eaa4c3c041e54cd1, type: 3}

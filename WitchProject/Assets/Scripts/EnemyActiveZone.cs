@@ -62,7 +62,6 @@ public class EnemyActivationZone : MonoBehaviour
         if (!playerInside && other.CompareTag("PlayerTriggerZone"))
         {
             playerInside = true;
-            Debug.Log("플레이어 진입! 구역 오브젝트 활성화.");
 
             // 모든 관리 대상 오브젝트 활성화
             foreach (GameObject obj in managedObjects)
@@ -86,9 +85,7 @@ public class EnemyActivationZone : MonoBehaviour
         if (playerInside && other.CompareTag("PlayerTriggerZone"))
         {
             playerInside = false;
-            Debug.Log("플레이어 이탈! 다음 구역 활성화 및 현재 구역 파괴.");
 
-            // ★★★ [핵심 로직] 다음 단계 오브젝트 활성화 ★★★
             ActivateNextPhaseObjects();
 
             // 현재 구역 및 오브젝트 파괴
@@ -101,7 +98,6 @@ public class EnemyActivationZone : MonoBehaviour
     /// </summary>
     private void ActivateNextPhaseObjects()
     {
-        Debug.Log("다음 단계 오브젝트를 활성화합니다: 다음 PuzzleManager, 횃불 등.");
         foreach (GameObject obj in objectsToActivateOnExit)
         {
             if (obj != null)

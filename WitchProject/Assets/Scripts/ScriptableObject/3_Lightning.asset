@@ -21,3 +21,4 @@ MonoBehaviour:
   requiredNodesForNextTier: 5
   parentNodes:
   - {fileID: 11400000, guid: 4d1d1d5d4efc77248b0aa38508d2cdc3, type: 2}
+  skillIcon: {fileID: 21300000, guid: 2abd41c5d128f0a4fb60abe998a6124a, type: 3}
