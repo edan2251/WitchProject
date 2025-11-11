@@ -13,6 +13,7 @@ TagManager:
   - PlayerTriggerZone
   - TriggerZone
   - Projectile
+  - Block
   layers:
   - Default
   - TransparentFX

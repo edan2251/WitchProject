@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 6313058807926072141}
   - component: {fileID: 4503177384667997349}
   m_Layer: 0
-  m_Name: Water
+  m_Name: Water 1
   m_TagString: Block
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -126,5 +126,4 @@ MonoBehaviour:
   hp: 0
   dropCount: 1
   mineable: 0
-  itemPrefab: {fileID: 4503177384667997349, guid: 8c311dafc60df164290049f886c04c19,
-    type: 3}
+  itemPrefab: {fileID: 4503177384667997349}

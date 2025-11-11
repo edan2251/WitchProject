@@ -12,9 +12,10 @@ GameObject:
   - component: {fileID: 9142628016966938050}
   - component: {fileID: 3117666621849335195}
   - component: {fileID: 3774239141491791603}
+  - component: {fileID: 3250266770291279648}
   m_Layer: 0
   m_Name: Dirt
-  m_TagString: Untagged
+  m_TagString: Block
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -105,3 +106,25 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &3250266770291279648
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1680629931913680788}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 234c2eee7946845448edcc541d67e358, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  itemName: "\uD759"
+  itemIcon: {fileID: 21300000, guid: d85a821ca93551d43b1f21672843e301, type: 3}
+  maxStack: 10
+  type: 0
+  maxHP: 3
+  hp: 0
+  dropCount: 1
+  mineable: 1
+  itemPrefab: {fileID: 3250266770291279648, guid: b46000bcea61fcf498aa966f25e914fc,
+    type: 3}
