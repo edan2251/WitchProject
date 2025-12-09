@@ -2,14 +2,17 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
-public class InventorySlot : MonoBehaviour
+public class InventorySlot : MonoBehaviour, IPointerClickHandler
 {
     //public ItemData item;
     public Inventory inventory;
     public Block block;
 
     public int amount;
+
+    public ItemType blockType;
 
     [Header("UI Reference")]
     public Image itemIcon;                          // 아이템 아이콘 이미지
@@ -21,6 +24,14 @@ public class InventorySlot : MonoBehaviour
 
     public Image slotBackgroundImage;
 
+    public CraftingPanel craftingPanel;
+
+    void Awake()
+    {
+        if (!craftingPanel)
+            craftingPanel = FindObjectOfType<CraftingPanel>(true);
+    }
+
     // Start is called before the first frame update
     void Start()
     {
@@ -29,6 +40,14 @@ public class InventorySlot : MonoBehaviour
             slotCanvasGroup = GetComponent<CanvasGroup>();
         if (slotBackgroundImage == null) slotBackgroundImage = GetComponent<Image>();
         UpdateSlotUI();
+    }
+
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (eventData.button != PointerEventData.InputButton.Right) return;
+        if (!craftingPanel) return;
+
+        craftingPanel.AddPlanned(blockType, 1);
     }
 
     public void SetItem(Block newBlock, int newAmount)        // 슬롯에 아이템 설정
